@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 interface PlayerStats {
   name: string;
   civilization: number;
+  civilization_name: string;
   winner: boolean;
   military_score: number;
   economy_score: number;
@@ -24,22 +25,18 @@ interface PlayerStats {
 interface GameStats {
   id: number;
   game_version: string;
-  map: any; // If you store the map as a JSON object, you can type more specifically
+  map: any;
   game_type: string;
-  duration: number; // stored as total seconds in your DB
+  duration: number;
   players: PlayerStats[];
   timestamp: string;
 }
 
-// --- Helper to clean up "game_type" string ---
 function cleanGameType(rawType: string): string {
-  // Usually looks like "(<Version.DE: 21>, 'VER 9.4', 63.0, 5, 133431)"
-  // We'll extract 'VER x.x'
   const match = rawType.match(/'(VER.*?)'/);
   return match && match[1] ? match[1] : rawType;
 }
 
-// --- Helper to format duration from total seconds to a "X hours Y minutes Z seconds" style
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const remainder = totalSeconds % 3600;
@@ -61,19 +58,29 @@ function formatDuration(totalSeconds: number): string {
   }
 }
 
+function sanitizeDuration(seconds: number): number {
+  // If match length is extremely large or too short, treat it as invalid
+  if (seconds > 4 * 3600 || seconds < 10) {
+    return 0;
+  }
+  return seconds;
+}
+
 const GameStatsPage = () => {
   const router = useRouter();
   const [games, setGames] = useState<GameStats[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // If you want to toggle premium fields, set this or retrieve from user status
+  const isPremiumUser = false;
+
   useEffect(() => {
     const fetchGameStats = async () => {
       try {
-        // Add a cache-buster so it doesn't stale-cache
-        const response = await fetch(
-          `http://localhost:8002/api/game_stats?ts=${Date.now()}`,
-          { cache: "no-store" }
-        );
+        const response = await fetch(`/api/game_stats?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
+        
         const data = await response.json();
         console.log("🔍 RAW API Response:", data);
 
@@ -83,22 +90,20 @@ const GameStatsPage = () => {
           return;
         }
 
-        // Convert fields if stored as JSON strings in the DB
-        const formattedGames = data.map((game) => {
-          // Convert 'players' if it's a string
-          const safePlayers =
-            typeof game.players === "string"
-              ? JSON.parse(game.players)
-              : game.players;
+        // Convert any string-ified players or map fields
+        const formattedGames = data.map((game: GameStats) => {
+          let safePlayers = game.players;
+          if (typeof safePlayers === "string") {
+            try {
+              safePlayers = JSON.parse(safePlayers);
+            } catch {}
+          }
 
-          // Convert 'map' if it's a JSON string
           let safeMap = game.map;
           if (typeof safeMap === "string") {
             try {
               safeMap = JSON.parse(safeMap);
-            } catch {
-              // fallback: keep as string
-            }
+            } catch {}
           }
 
           return {
@@ -108,7 +113,7 @@ const GameStatsPage = () => {
           };
         });
 
-        // Filter out games with empty players array
+        // Only keep matches that have at least 1 player
         const validGames = formattedGames.filter(
           (g) => g.players && g.players.length > 0
         );
@@ -117,9 +122,6 @@ const GameStatsPage = () => {
           setLoading(false);
           return;
         }
-
-        // Sort newest (highest id) first => "Latest Match"
-        validGames.sort((a, b) => b.id - a.id);
 
         setGames(validGames);
         setLoading(false);
@@ -130,10 +132,25 @@ const GameStatsPage = () => {
     };
 
     fetchGameStats();
-    // Optional: auto-refresh every 3s
+    // Optionally poll every few seconds for updates
     const interval = setInterval(fetchGameStats, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  function showStat<T extends string | number>(
+    actualValue: T,
+    suffix?: string
+  ): React.ReactNode {
+    // Only reveal real stats if premium
+    return isPremiumUser ? (
+      <>
+        {actualValue}
+        {suffix ? ` ${suffix}` : ""}
+      </>
+    ) : (
+      <span className="text-gray-400 italic">Premium Stats</span>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -148,8 +165,12 @@ const GameStatsPage = () => {
       ) : (
         <div className="space-y-6">
           {games.map((game, index) => {
-            // The newest game is index=0 => "Latest Match"
+            // index=0 => newest => "🔥 Latest Match"
+            // index=1 => "Previous Match #1"
+            // index=2 => "Previous Match #2"
             const isLatest = index === 0;
+            const matchNumber = games.length - index;
+            const cleanedDuration = sanitizeDuration(game.duration);
 
             return (
               <div
@@ -163,27 +184,37 @@ const GameStatsPage = () => {
                 <h3 className="text-2xl font-semibold">
                   {isLatest
                     ? "🔥 Latest Match"
-                    : `Previous Match #${games.length - index}`}
+                    : `Previous Match #${matchNumber}`
+                  }
                 </h3>
-                <p className="text-lg mt-2">
-                  <strong>Game Version:</strong> {game.game_version}
+
+                <p className="text-lg">
+                  <strong>Game Version:</strong>{" "}
+                  {typeof game.game_version === "string" 
+                  ? game.game_version.replace("Version.", "") 
+                  : JSON.stringify(game.game_version)}
+
                 </p>
                 <p className="text-lg">
                   <strong>Map:</strong>{" "}
                   {typeof game.map === "object" ? game.map?.name : game.map}
                 </p>
                 <p className="text-lg">
-                  <strong>Game Type:</strong> {cleanGameType(game.game_type)}
+                  <strong>Game Type:</strong>{" "}
+                  {cleanGameType(game.game_type).replace("VER ", "v")}
                 </p>
                 <p className="text-lg">
-                  <strong>Duration:</strong> {formatDuration(game.duration)}
+                  <strong>Duration:</strong>{" "}
+                  {cleanedDuration === 0
+                    ? "⚠️ Invalid Duration (Likely Out of Sync)"
+                    : formatDuration(cleanedDuration)}
                 </p>
 
                 <h4 className="text-xl font-semibold mt-4">Players</h4>
                 <div className="mt-2 space-y-2">
-                  {game.players.map((player, idx) => (
+                  {game.players.map((player, pIdx) => (
                     <div
-                      key={idx}
+                      key={pIdx}
                       className={`p-4 rounded-lg ${
                         player.winner
                           ? "bg-gray-500 text-black font-bold"
@@ -192,50 +223,46 @@ const GameStatsPage = () => {
                     >
                       <p>
                         <strong>Name:</strong> {player.name}{" "}
-                        {player.winner && "🏆"}
+                        {player.winner ? (
+                          <span className="text-yellow-300 font-bold">🏆</span>
+                        ) : (
+                          <span className="text-red-400 italic">❌</span>
+                        )}
                       </p>
                       <p>
-                        <strong>Civilization:</strong> {player.civilization}
+                        <strong>Civilization:</strong>{" "}
+                        {player.civilization_name || player.civilization}
                       </p>
                       <p>
-                        <strong>Military Score:</strong> {player.military_score}
+                        <strong>Military Score:</strong>{" "}
+                        {showStat(player.military_score)}
                       </p>
                       <p>
-                        <strong>Economy Score:</strong> {player.economy_score}
+                        <strong>Economy Score:</strong>{" "}
+                        {showStat(player.economy_score)}
                       </p>
                       <p>
                         <strong>Technology Score:</strong>{" "}
-                        {player.technology_score}
+                        {showStat(player.technology_score)}
                       </p>
                       <p>
-                        <strong>Society Score:</strong> {player.society_score}
+                        <strong>Society Score:</strong>{" "}
+                        {showStat(player.society_score)}
                       </p>
                       <p>
-                        <strong>Units Killed:</strong> {player.units_killed}
-                      </p>
-                      <p>
-                        <strong>Buildings Destroyed:</strong>{" "}
-                        {player.buildings_destroyed}
-                      </p>
-                      <p>
-                        <strong>Resources Gathered:</strong>{" "}
-                        {player.resources_gathered}
-                      </p>
-                      <p>
-                        <strong>Fastest Castle Age:</strong>{" "}
-                        {player.fastest_castle_age} seconds
-                      </p>
-                      <p>
-                        <strong>Fastest Imperial Age:</strong>{" "}
-                        {player.fastest_imperial_age} seconds
-                      </p>
-                      <p>
-                        <strong>Relics Collected:</strong>{" "}
-                        {player.relics_collected}
+                        <strong className="italic">More</strong>{" "}
+                        {showStat(player.units_killed)}
                       </p>
                     </div>
                   ))}
                 </div>
+
+                {!game.players.some((p) => p.winner) && (
+                  <p className="text-red-500 italic mt-4">
+                    ⚠️ No winner detected. Match likely ended in Out of Sync.
+                    All bets refunded.
+                  </p>
+                )}
               </div>
             );
           })}
