@@ -1,6 +1,8 @@
-###############################################################################
-# app.py
-###############################################################################
+"""
+app.py
+Your Flask + SQLAlchemy backend for storing replay parse results.
+"""
+
 import os
 import io
 import time
@@ -12,8 +14,7 @@ from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from sqlalchemy import text
-from mgz import header, summary
+from sqlalchemy import text, Index
 
 ###############################################################################
 # FLASK SETUP
@@ -21,15 +22,8 @@ from mgz import header, summary
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_size": 20,
-    "max_overflow": 40,
-    "pool_timeout": 30,
-    "pool_recycle": 1800,
-}
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://aoe2user:secretpassword@aoe2-postgres:5432/aoe2db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
 db = SQLAlchemy(app)
 
 ###############################################################################
@@ -39,7 +33,9 @@ class GameStats(db.Model):
     __tablename__ = "game_stats"
 
     id = db.Column(db.Integer, primary_key=True)
-    replay_file = db.Column(db.String(500), unique=True, nullable=False)
+    replay_file = db.Column(db.String(500), nullable=False)
+    replay_hash = db.Column(db.String(64), nullable=False)
+
     game_version = db.Column(db.String(50))
     map = db.Column(db.String(100))
     game_type = db.Column(db.String(50))
@@ -51,6 +47,15 @@ class GameStats(db.Model):
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
     played_on = db.Column(db.DateTime, nullable=True)
 
+    parse_iteration = db.Column(db.Integer, default=0)
+    is_final = db.Column(db.Boolean, default=False)
+
+Index("ix_replay_iteration", GameStats.replay_file, GameStats.parse_iteration)
+Index("ix_replay_hash_iteration", GameStats.replay_hash, GameStats.parse_iteration)
+
+###############################################################################
+# DB INIT
+###############################################################################
 with app.app_context():
     for attempt in range(10):
         try:
@@ -67,47 +72,30 @@ with app.app_context():
     logging.info("✅ Tables created or verified existing.")
 
 ###############################################################################
-# HELPER: Infer Resign Winner (Disabled for now)
-###############################################################################
-def infer_resign_winner(file_bytes, players):
-    return None  # TODO: Properly parse resign actions using mgz.fast
-
-###############################################################################
-# PARSE LOGIC
+# HELPER - parse replay from disk (legacy or alternate flow)
 ###############################################################################
 def parse_replay_full(replay_path):
     if not os.path.exists(replay_path):
-        logging.error(f"❌ Not found: {replay_path}")
+        logging.error(f"❌ Replay not found: {replay_path}")
         return None
 
     try:
+        from mgz import header, summary
         with open(replay_path, "rb") as f:
             file_bytes = f.read()
-    except Exception as e:
-        logging.error(f"❌ Reading error: {e}")
-        return None
 
-    stats = {}
-    try:
         h = header.parse(file_bytes)
-        stats["game_version"] = str(h.version)
-    except Exception as e:
-        logging.error(f"❌ parse header error: {e}")
-        return None
-
-    try:
         s = summary.Summary(io.BytesIO(file_bytes))
-        raw_map = s.get_map()
-        stats["map"] = {
-            "name": raw_map.get("name", "Unknown"),
-            "size": raw_map.get("size", "Unknown"),
-        }
-        stats["game_type"] = str(s.get_version())
 
-        raw_duration = s.get_duration()
-        if raw_duration > (20 * 3600):
-            raw_duration //= 1000
-        stats["duration"] = int(raw_duration)
+        stats = {
+            "game_version": str(h.version),
+            "map": {
+                "name": s.get_map().get("name", "Unknown"),
+                "size": s.get_map().get("size", "Unknown"),
+            },
+            "game_type": str(s.get_version()),
+            "duration": int(s.get_duration() // 1000 if s.get_duration() > 48 * 3600 else s.get_duration()),
+        }
 
         players = []
         winner = None
@@ -122,30 +110,17 @@ def parse_replay_full(replay_path):
             if p_data["winner"]:
                 winner = p_data["name"]
 
-        if not winner and len(players) == 2:
-            r_index = infer_resign_winner(file_bytes, players)
-            if r_index is not None:
-                players[r_index]["winner"] = True
-                players[1 - r_index]["winner"] = False
-                winner = players[r_index]["name"]
-                logging.info(f"🏆 Winner determined by Resign: {winner}")
-
-        stats["winner"] = winner if winner else "Unknown"
         stats["players"] = players
+        stats["winner"] = winner or "Unknown"
+        dt = extract_datetime_from_filename(os.path.basename(replay_path))
+        stats["played_on"] = dt.isoformat() if dt else None
+
+        logging.info(f"✅ parse_replay_full => {replay_path}")
+        return stats
 
     except Exception as e:
-        logging.error(f"❌ summary error: {e}")
+        logging.error(f"❌ parse error: {e}")
         return None
-
-    stats["replay_file"] = replay_path
-    dt = extract_datetime_from_filename(os.path.basename(replay_path))
-    stats["played_on"] = dt.isoformat() if dt else None
-
-    logging.info(f"✅ Parsed replay: {stats['replay_file']}")
-    logging.info(f"🕓 Played on: {stats['played_on']}")
-    logging.info(f"🎯 Winner: {stats['winner']}")
-
-    return stats
 
 def extract_datetime_from_filename(fname):
     import re
@@ -158,102 +133,103 @@ def extract_datetime_from_filename(fname):
     return None
 
 ###############################################################################
-# API ROUTES
+# API ROUTE: /api/parse_replay
 ###############################################################################
 @app.route("/api/parse_replay", methods=["POST"])
 def parse_new_replay():
     data = request.json
     replay_path = data.get("replay_file")
-    if not replay_path:
-        return jsonify({"error": "No replay_file provided."}), 400
+    replay_hash = data.get("replay_hash")
+    parse_iteration = int(data.get("parse_iteration", 0))
+    is_final = bool(data.get("is_final", False))
 
-    replay_path = str(pathlib.Path(replay_path).expanduser().resolve())
+    if not replay_path or not replay_hash:
+        return jsonify({"error": "Missing replay_file or replay_hash."}), 400
 
-    existing = GameStats.query.filter_by(replay_file=replay_path).first()
-    if existing:
-        logging.info(f"♻️ Replay already exists. Replacing: {replay_path}")
-        db.session.delete(existing)
-        db.session.commit()
-
-    if not os.path.exists(replay_path):
-        return jsonify({"error": f"File not found: {replay_path}"}), 400
-
-    parsed = parse_replay_full(replay_path)
-    if not parsed:
-        return jsonify({"error": "Failed to parse replay"}), 500
+    existing_final = GameStats.query.filter_by(replay_hash=replay_hash, is_final=True).first()
+    if is_final and existing_final:
+        logging.info(f"⏭️ Skipped: Final already stored for hash {replay_hash}")
+        return jsonify({"message": "Replay already parsed as final. Skipped."}), 200
 
     new_game = GameStats(
         replay_file=replay_path,
-        game_version=parsed.get("game_version"),
-        map=json.dumps(parsed.get("map", {})),
-        game_type=parsed.get("game_type"),
-        duration=parsed.get("duration", 0),
-        winner=parsed.get("winner", "Unknown"),
-        players=json.dumps(parsed.get("players", [])),
+        replay_hash=replay_hash,
+        game_version=data.get("game_version"),
+        map=json.dumps({
+            "name": data.get("map_name", "Unknown"),
+            "size": data.get("map_size", "Unknown")
+        }),
+        game_type=data.get("game_type"),
+        duration=data.get("duration", 0),
+        winner=data.get("winner", "Unknown"),
+        players=json.dumps(data.get("players", [])),
         event_types="[]",
         key_events="[]",
-        played_on=datetime.fromisoformat(parsed["played_on"]) if parsed.get("played_on") else None
+        parse_iteration=parse_iteration,
+        is_final=is_final,
+        played_on=datetime.fromisoformat(data["played_on"]) if data.get("played_on") else None
     )
 
-    db.session.add(new_game)
     try:
+        db.session.add(new_game)
         db.session.commit()
     except Exception as e:
         logging.error(f"❌ DB commit failed: {e}")
         return jsonify({"error": "DB insert failed"}), 500
 
-    return jsonify({"message": "Replay parsed and stored successfully!"})
+    return jsonify({"message": f"Replay stored (iteration {parse_iteration})"})
 
+###############################################################################
+# API ROUTE: /api/game_stats
+###############################################################################
 @app.route("/api/game_stats", methods=["GET"])
 def game_stats():
-    all_games = GameStats.query.order_by(
-        GameStats.played_on.desc().nullslast(),
-        GameStats.timestamp.desc()
-    ).all()
-
+    games = GameStats.query.filter_by(is_final=True).order_by(GameStats.played_on.desc().nullslast()).all()
     results = []
-    for g in all_games:
+    for g in games:
         try:
-            game_map = json.loads(g.map) if g.map else {}
-        except Exception:
+            game_map = json.loads(g.map or "{}")
+        except:
             game_map = {}
 
         try:
-            game_players = json.loads(g.players) if g.players else []
-        except Exception:
-            game_players = []
+            players = json.loads(g.players or "[]")
+        except:
+            players = []
 
         try:
-            event_types = json.loads(g.event_types) if g.event_types else []
-        except Exception:
+            event_types = json.loads(g.event_types or "[]")
+        except:
             event_types = []
 
         try:
-            key_events = json.loads(g.key_events) if g.key_events else []
-        except Exception:
+            key_events = json.loads(g.key_events or "[]")
+        except:
             key_events = []
 
         results.append({
             "id": g.id,
             "replay_file": g.replay_file,
-            "game_version": str(g.game_version),
+            "replay_hash": g.replay_hash,
+            "parse_iteration": g.parse_iteration,
+            "is_final": g.is_final,
+            "game_version": g.game_version,
             "map": game_map,
             "game_type": g.game_type,
             "duration": g.duration,
             "winner": g.winner,
-            "players": game_players,
+            "players": players,
             "event_types": event_types,
             "key_events": key_events,
             "timestamp": g.timestamp.isoformat(),
             "played_on": g.played_on.isoformat() if g.played_on else None
         })
 
-
     return jsonify(results)
 
 ###############################################################################
-# MAIN
+# RUN
 ###############################################################################
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    logging.basicConfig(level=logging.INFO)
     app.run(debug=True, host="0.0.0.0", port=8002)

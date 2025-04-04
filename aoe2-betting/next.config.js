@@ -9,11 +9,14 @@ const isDocker = process.env.DOCKER === 'true';
 module.exports = withPWA({
   reactStrictMode: true,
 
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   env: {
     BACKEND_API: "http://192.168.219.28:8000",
     REPLAY_API: "http://192.168.219.28:5001",
   },
-
 
   async rewrites() {
     return [

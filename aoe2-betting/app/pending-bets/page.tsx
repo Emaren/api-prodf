@@ -5,9 +5,16 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+type Bet = {
+  challenger: string;
+  betAmount: number;
+  inactive?: boolean;
+};
+
+
 export default function PendingBetsPage() {
   const router = useRouter();
-  const [pendingBets, setPendingBets] = useState([]);
+  const [pendingBets, setPendingBets] = useState<Bet[]>([]);
 
   // Load pending bets from localStorage on mount
   useEffect(() => {
@@ -18,14 +25,14 @@ export default function PendingBetsPage() {
   }, []);
 
   // Accept a bet and remove it from the list
-  const handleAccept = (index) => {
+  const handleAccept = (index: number) => {
     const updatedBets = pendingBets.filter((_, i) => i !== index);
     setPendingBets(updatedBets);
     localStorage.setItem("pendingBets", JSON.stringify(updatedBets));
   };
 
   // Toggle inactive state (greying out)
-  const toggleInactive = (index) => {
+  const toggleInactive = (index: number) => {
     const updatedBets = pendingBets.map((bet, i) =>
       i === index ? { ...bet, inactive: !bet.inactive } : bet
     );

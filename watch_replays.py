@@ -2,72 +2,55 @@ import os
 import platform
 import time
 import logging
-import json
 import threading
-import requests
+import hashlib
 from watchdog.observers.polling import PollingObserver
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-
 from config import load_config
+
+# ✅ Import full parsing logic and API submission
+from parse_replay import parse_replay as full_parse_replay, send_to_api
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 config = load_config()
-config_dirs = config.get("replay_directories", None)
-use_polling = config.get("use_polling", True)
-polling_interval = config.get("polling_interval", 1)
+REPLAY_DIRS = config.get("replay_directories") or []
+USE_POLLING = config.get("use_polling", True)
+POLL_INTERVAL = config.get("polling_interval", 1)
+PARSE_INTERVAL = config.get("parse_interval", 10)
 
-PROCESSED_REPLAYS_FILE = "processed_replays.json"
-processed_replays = {}
+ACTIVE_REPLAYS = {}
+LOCK = threading.Lock()
 
-# Hardcoded AoE2 replay paths
-AOE2HD_REPLAY_DIR = "/Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame"
-AOE2DE_REPLAY_DIR = os.path.expanduser("~/Documents/My Games/Age of Empires 2 DE/SaveGame")
 
-def load_processed_replays():
-    global processed_replays
+def sha1_of_file(path):
     try:
-        with open(PROCESSED_REPLAYS_FILE, "r") as f:
-            processed_replays = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        processed_replays = {}
+        with open(path, 'rb') as f:
+            return hashlib.sha1(f.read()).hexdigest()
+    except Exception:
+        return None
 
-def save_processed_replays():
-    with open(PROCESSED_REPLAYS_FILE, "w") as f:
-        json.dump(processed_replays, f, indent=4)
 
-def parse_replay_api(file_path):
-    """Tell the Flask API to parse this replay."""
+def parse_replay(file_path, iteration, is_final=False):
     try:
-        # Rewrite path for Docker
-        if file_path.startswith(AOE2HD_REPLAY_DIR):
-            file_path = file_path.replace(AOE2HD_REPLAY_DIR, "/replays")
-
-        logging.info(f"📂 Sending to parser: {file_path}")
-        url = "http://localhost:8002/api/parse_replay"
-        resp = requests.post(url, json={"replay_file": file_path})
-        if resp.ok:
-            logging.info(f"✅ Replay parsed/stored: {file_path}")
-        else:
-            logging.error(f"❌ Backend error: {resp.text}")
+        parsed_data = full_parse_replay(file_path, parse_iteration=iteration, is_final=is_final)
+        if parsed_data:
+            send_to_api(parsed_data)
     except Exception as e:
-        logging.error(f"❌ API call failed: {e}")
+        logging.error(f"❌ Parse failed: {e}")
 
-def wait_for_final_state(replay_file):
-    """Wait for the replay file to stop growing before triggering parse."""
-    stable_delay = 5
-    poll_interval = 2
+
+def wait_for_stability(file_path, stable_delay=5, poll_interval=2):
     last_size = -1
     stable_time = 0
-    start_time = time.time()
 
     while True:
         try:
-            size = os.path.getsize(replay_file)
+            size = os.path.getsize(file_path)
         except FileNotFoundError:
-            logging.warning(f"File disappeared: {replay_file}")
-            return
+            logging.warning(f"🛑 File disappeared: {file_path}")
+            return False
 
         if size == last_size:
             stable_time += poll_interval
@@ -76,40 +59,68 @@ def wait_for_final_state(replay_file):
             last_size = size
 
         if stable_time >= stable_delay:
-            logging.info(f"🔒 Stable file => parsing: {replay_file}")
-            parse_replay_api(replay_file)
-            return
-
-        if (time.time() - start_time) > 300:
-            logging.warning(f"⚠️ Timeout on: {replay_file}")
-            return
+            logging.info(f"🔒 File stable: {file_path}")
+            return True
 
         time.sleep(poll_interval)
 
-def on_new_or_modified_replay(replay_file):
-    """Skip out-of-sync games, otherwise parse in a thread."""
-    if "Out of Sync Save" in replay_file:
-        logging.warning(f"⚠️ Skipping out-of-sync replay: {replay_file}")
+
+def watch_live_replay(file_path):
+    if not wait_for_stability(file_path):
         return
 
-    t = threading.Thread(target=wait_for_final_state, args=(replay_file,), daemon=True)
-    t.start()
+    last_hash = None
+    iteration = 0
+    stable_iterations = 0
+    max_stable_iterations = 3
+
+    while True:
+        if not os.path.exists(file_path):
+            logging.info(f"🛑 File removed: {file_path}")
+            return
+
+        h = sha1_of_file(file_path)
+        if h and h != last_hash:
+            last_hash = h
+            iteration += 1
+            stable_iterations = 0
+            parse_replay(file_path, iteration, is_final=False)
+        else:
+            stable_iterations += 1
+
+        if stable_iterations >= max_stable_iterations:
+            logging.info(f"✅ Final parse triggered for: {file_path}")
+            parse_replay(file_path, iteration + 1, is_final=True)
+            break
+
+        time.sleep(PARSE_INTERVAL)
+
 
 class ReplayEventHandler(FileSystemEventHandler):
+    def handle_event(self, path):
+        if not path.endswith((".aoe2record", ".aoe2mpgame", ".mgz")) or "Out of Sync" in path:
+            return
+
+        with LOCK:
+            if path not in ACTIVE_REPLAYS:
+                logging.info(f"🆕 Detected replay: {path}")
+                t = threading.Thread(target=watch_live_replay, args=(path,), daemon=True)
+                ACTIVE_REPLAYS[path] = t
+                t.start()
+
     def on_created(self, event):
-        if not event.is_directory and event.src_path.endswith((".aoe2record", ".aoe2mpgame")):
-            logging.info(f"🆕 New replay: {event.src_path}")
-            on_new_or_modified_replay(event.src_path)
+        if not event.is_directory:
+            self.handle_event(event.src_path)
 
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith((".aoe2record", ".aoe2mpgame")):
-            logging.info(f"✍️ Modified replay: {event.src_path}")
-            on_new_or_modified_replay(event.src_path)
+        if not event.is_directory:
+            self.handle_event(event.src_path)
 
-def get_possible_directories():
-    dirs = []
+
+def get_default_replay_dirs():
     system = platform.system()
     home = os.path.expanduser("~")
+    dirs = ["/replays"]
 
     if system == "Windows":
         userprofile = os.environ.get("USERPROFILE", "")
@@ -118,22 +129,26 @@ def get_possible_directories():
             os.path.join(userprofile, "Documents", "My Games", "Age of Empires 2 DE", "SaveGame"),
         ]
     elif system == "Darwin":
-        dirs.append(AOE2HD_REPLAY_DIR)
-        dirs.append(AOE2DE_REPLAY_DIR)
-    else:  # Linux
+        dirs += [
+            "/Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame",
+            "/Users/tonyblum/Documents/My Games/Age of Empires 2 DE/SaveGame",
+        ]
+    else:
         dirs += [
             os.path.join(home, ".wine/drive_c/Program Files (x86)/Microsoft Games/Age of Empires II HD/SaveGame"),
             os.path.join(home, "Documents/My Games/Age of Empires 2 HD/SaveGame"),
         ]
+
     return [d for d in dirs if os.path.isdir(d)]
 
-def watch_replay_directories(directories, use_polling=True, interval=1):
-    load_processed_replays()
-    observer = PollingObserver() if use_polling else Observer()
+
+if __name__ == '__main__':
+    directories = REPLAY_DIRS or get_default_replay_dirs()
+    observer = PollingObserver() if USE_POLLING else Observer()
 
     for directory in directories:
         if os.path.exists(directory):
-            logging.info(f"👀 Watching: {directory}")
+            logging.info(f"👀 Watching directory: {directory}")
             observer.schedule(ReplayEventHandler(), directory, recursive=False)
         else:
             logging.warning(f"⚠️ Missing directory: {directory}")
@@ -141,17 +156,9 @@ def watch_replay_directories(directories, use_polling=True, interval=1):
     observer.start()
     try:
         while True:
-            time.sleep(interval)
+            time.sleep(POLL_INTERVAL)
     except KeyboardInterrupt:
-        logging.info("🛑 Stopping watcher.")
+        logging.info("🛑 Stopping watcher...")
         observer.stop()
+
     observer.join()
-
-if __name__ == '__main__':
-    logging.info("📌 Starting Replay Watcher...")
-    if config_dirs:
-        watch_dirs = config_dirs
-    else:
-        watch_dirs = get_possible_directories()
-
-    watch_replay_directories(watch_dirs, use_polling=use_polling, interval=polling_interval)

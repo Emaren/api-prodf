@@ -75,22 +75,21 @@ const GameStatsPage = () => {
   const isPremiumUser = false;
 
   useEffect(() => {
+    let latestGameId = -1;
+  
     const fetchGameStats = async () => {
       try {
-        const response = await fetch(`/api/game_stats?ts=${Date.now()}`, {
+        const response = await fetch("/api/game_stats?ts=" + Date.now(), {
           cache: "no-store",
         });
-        
+  
         const data = await response.json();
-        console.log("🔍 RAW API Response:", data);
-
         if (!Array.isArray(data)) {
           console.warn("⚠️ No game stats array found in API response.");
           setLoading(false);
           return;
         }
-
-        // Convert any string-ified players or map fields
+  
         const formattedGames = data.map((game: GameStats) => {
           let safePlayers = game.players;
           if (typeof safePlayers === "string") {
@@ -98,22 +97,21 @@ const GameStatsPage = () => {
               safePlayers = JSON.parse(safePlayers);
             } catch {}
           }
-
+  
           let safeMap = game.map;
           if (typeof safeMap === "string") {
             try {
               safeMap = JSON.parse(safeMap);
             } catch {}
           }
-
+  
           return {
             ...game,
             players: safePlayers,
             map: safeMap,
           };
         });
-
-        // Only keep matches that have at least 1 player
+  
         const validGames = formattedGames.filter(
           (g) => g.players && g.players.length > 0
         );
@@ -122,20 +120,26 @@ const GameStatsPage = () => {
           setLoading(false);
           return;
         }
-
-        setGames(validGames);
+  
+        // Only update state if there's a new game
+        const newestId = validGames[0]?.id ?? -1;
+        if (newestId !== latestGameId) {
+          latestGameId = newestId;
+          setGames(validGames);
+          console.log("🔁 Updated game list with latest ID:", newestId);
+        }
         setLoading(false);
       } catch (err) {
         console.error("❌ Error fetching game stats:", err);
         setLoading(false);
       }
     };
-
+  
     fetchGameStats();
-    // Optionally poll every few seconds for updates
     const interval = setInterval(fetchGameStats, 3000);
     return () => clearInterval(interval);
   }, []);
+  
 
   function showStat<T extends string | number>(
     actualValue: T,

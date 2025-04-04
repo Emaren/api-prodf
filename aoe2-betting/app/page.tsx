@@ -8,6 +8,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UserCircle, UploadCloud, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+type Bet = {
+  challenger: string;
+  betAmount: number;
+  inactive?: boolean;
+};
+
+
 export default function MainPage() {
   const router = useRouter();
   const [betPending, setBetPending] = useState(false);
@@ -15,7 +22,7 @@ export default function MainPage() {
   const [challenger, setChallenger] = useState("");
   const [opponent, setOpponent] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [pendingBets, setPendingBets] = useState([]);
+  const [pendingBets, setPendingBets] = useState<Bet[]>([]);
   const [betStatus, setBetStatus] = useState(""); // Tracks the animated status text
   const [showButtons, setShowButtons] = useState(true); // Controls button visibility
 
@@ -40,8 +47,9 @@ export default function MainPage() {
 
       // Prevent duplicate entries
       const betExists = storedBets.some(
-        (bet) => bet.challenger === challenger && bet.betAmount === betAmount
-      );
+        (bet: { challenger: string; betAmount: number }) =>
+          bet.challenger === challenger && bet.betAmount === betAmount
+      );      
 
       if (!betExists) {
         const updatedBets = [...storedBets, newBet];

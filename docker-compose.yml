@@ -36,16 +36,28 @@ services:
       dockerfile: Dockerfile
     container_name: aoe2-backend
     ports:
-      - "8002:8002"  # ✅ Flask API exposed to host
+      - "8002:8002"
     volumes:
       - .:/app
-      - /Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame:/replays  # ✅ Replay mount
+      - "/Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame:/replays"
     environment:
       - FLASK_ENV=development
+      - FLASK_API_URL=http://aoe2-backend:8002/api/parse_replay
     command: ["python", "app.py"]
     depends_on:
       db:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./aoe2-betting
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    env_file:
+      - ./aoe2-betting/.env
 
 volumes:
   aoe2db_data:
