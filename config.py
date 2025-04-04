@@ -2,8 +2,16 @@ import json
 import os
 from dotenv import load_dotenv
 
-# ✅ Load .env file from root or aoe2-betting subdir
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "aoe2-betting", ".env"))
+# Detect environment (default: development)
+ENV = os.getenv("ENV", "development")
+
+# Select .env or .env.production based on ENV
+env_file = ".env.production" if ENV == "production" else ".env"
+env_path = os.path.join(os.path.dirname(__file__), "aoe2-betting", env_file)
+
+# ✅ Load the correct .env file
+load_dotenv(dotenv_path=env_path)
+print(f"✅ Loaded environment: {ENV} from {env_file}")
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
@@ -19,3 +27,7 @@ def load_config():
         raise RuntimeError(f"❌ Failed to load configuration due to JSON format error: {e}")
     except Exception as e:
         raise RuntimeError(f"❌ Unexpected error while loading configuration: {e}")
+
+# Optional: expose API URLs based on environment
+def get_flask_api_url():
+    return os.getenv("FLASK_API_URL", "http://localhost:8002/api/parse_replay")

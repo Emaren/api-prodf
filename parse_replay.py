@@ -21,7 +21,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 from config import load_config
 import os
 
-FLASK_API_URL = os.getenv("FLASK_API_URL", "http://localhost:8002/api/parse_replay")
+from config import get_flask_api_url
+FLASK_API_URL = get_flask_api_url()
 
 def format_duration(seconds: int) -> str:
     minutes, secs = divmod(seconds, 60)

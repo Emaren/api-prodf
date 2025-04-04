@@ -86,6 +86,10 @@ with app.app_context():
     db.create_all()
     logging.info("✅ Tables created or verified existing.")
 
+@app.route("/")
+def index():
+    return "API is live"
+
 ###############################################################################
 # HELPER - parse replay from disk (legacy or alternate flow)
 ###############################################################################
