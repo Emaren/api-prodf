@@ -63,6 +63,8 @@ function sanitizeDuration(seconds: number): number {
   return seconds;
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8002";
+
 const GameStatsPage = () => {
   const router = useRouter();
   const [games, setGames] = useState<GameStats[]>([]);
@@ -73,7 +75,7 @@ const GameStatsPage = () => {
   useEffect(() => {
     const fetchGameStats = async () => {
       try {
-        const response = await fetch(`/api/game_stats?ts=${Date.now()}`, {
+        const response = await fetch(`${API_BASE}/api/game_stats?ts=${Date.now()}`, {
           cache: "no-store",
         });
 
