@@ -18,6 +18,9 @@ from mgz_hd.fast.actions import parse_action_71094
 print("Using mgz_hd from:", mgz_hd.__file__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+from config import load_config
+import os
+
 FLASK_API_URL = os.getenv("FLASK_API_URL", "http://localhost:8002/api/parse_replay")
 
 def format_duration(seconds: int) -> str:

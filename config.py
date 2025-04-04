@@ -1,14 +1,13 @@
 import json
 import os
+from dotenv import load_dotenv
 
-# ✅ Define the location of the config file
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+# ✅ Load .env file from root or aoe2-betting subdir
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "aoe2-betting", ".env"))
+
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
 def load_config():
-    """
-    Loads the configuration from config.json.
-    If the file is missing or invalid, it raises an error.
-    """
     if not os.path.exists(CONFIG_FILE):
         raise RuntimeError(f"❌ Configuration file not found at {CONFIG_FILE}. Please ensure config.json is present.")
 
@@ -20,11 +19,3 @@ def load_config():
         raise RuntimeError(f"❌ Failed to load configuration due to JSON format error: {e}")
     except Exception as e:
         raise RuntimeError(f"❌ Unexpected error while loading configuration: {e}")
-
-if __name__ == "__main__":
-    try:
-        config = load_config()
-        print("✅ Successfully loaded configuration:")
-        print(json.dumps(config, indent=2))
-    except RuntimeError as e:
-        print(str(e))
