@@ -22,8 +22,23 @@ from sqlalchemy import text, Index
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+# Fix for deprecated postgres:// URLs
+raw_db_url = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@aoe2-postgres:5432/aoe2"  # Docker default
+)
+if raw_db_url.startswith("postgres://"):
+    raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Optional: Add SSL if Render is detected
+if "RENDER" in os.environ or "render.com" in raw_db_url:
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {"sslmode": "require"}
+    }
+
 db = SQLAlchemy(app)
 
 ###############################################################################

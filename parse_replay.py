@@ -145,15 +145,29 @@ def parse_replay(replay_path: str, parse_iteration=0, is_final=False) -> dict:
     return stats
 
 def send_to_api(parsed_data: dict):
-    try:
-        logging.info(f"📤 Sending to API => {parsed_data['replay_file']}")
-        resp = requests.post(FLASK_API_URL, json=parsed_data)
-        if resp.ok:
-            logging.info(f"✅ API Response: {resp.status_code} - {resp.text}")
-        else:
-            logging.error(f"❌ API Error: {resp.status_code} - {resp.text}")
-    except Exception as exc:
-        logging.error(f"❌ Could not send to API: {exc}")
+    targets = load_config().get("api_targets", ["local"])
+
+    endpoints = {
+        "local": "http://localhost:8002/api/parse_replay",
+        "render": "https://aoe2hd-parser-api.onrender.com/api/parse_replay"
+    }
+
+    for target in targets:
+        api_url = endpoints.get(target)
+        if not api_url:
+            logging.warning(f"⚠️ Unknown API target: {target}")
+            continue
+
+        try:
+            logging.info(f"📤 Sending to [{target}] => {parsed_data['replay_file']}")
+            resp = requests.post(api_url, json=parsed_data)
+            if resp.ok:
+                logging.info(f"✅ [{target}] Response: {resp.status_code} - {resp.text}")
+            else:
+                logging.error(f"❌ [{target}] Error: {resp.status_code} - {resp.text}")
+        except Exception as exc:
+            logging.error(f"❌ [{target}] API failed: {exc}")
+
 
 def get_default_replay_dirs():
     system = platform.system()
