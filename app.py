@@ -22,7 +22,7 @@ from sqlalchemy import text, Index
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://aoe2user:secretpassword@aoe2-postgres:5432/aoe2db"
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
