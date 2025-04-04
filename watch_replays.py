@@ -9,6 +9,10 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from config import load_config
 
+# Override API endpoint for production
+os.environ["API_ENDPOINT"] = "https://aoe2hd-parser-api.onrender.com/api/parse_replay"
+
+
 # ✅ Import full parsing logic and API submission
 from parse_replay import parse_replay as full_parse_replay, send_to_api
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
@@ -32,6 +32,7 @@ interface GameStats {
   timestamp: string;
 }
 
+// --- Helpers ---
 function cleanGameType(rawType: string): string {
   const match = rawType.match(/'(VER.*?)'/);
   return match && match[1] ? match[1] : rawType;
@@ -39,9 +40,8 @@ function cleanGameType(rawType: string): string {
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
-  const remainder = totalSeconds % 3600;
-  const minutes = Math.floor(remainder / 60);
-  const secs = remainder % 60;
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
 
   if (hours > 0 && minutes > 0 && secs > 0) {
     return `${hours} hours ${minutes} minutes ${secs} seconds`;
@@ -59,10 +59,7 @@ function formatDuration(totalSeconds: number): string {
 }
 
 function sanitizeDuration(seconds: number): number {
-  // If match length is extremely large or too short, treat it as invalid
-  if (seconds > 4 * 3600 || seconds < 10) {
-    return 0;
-  }
+  if (seconds > 4 * 3600 || seconds < 10) return 0;
   return seconds;
 }
 
@@ -70,91 +67,81 @@ const GameStatsPage = () => {
   const router = useRouter();
   const [games, setGames] = useState<GameStats[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // If you want to toggle premium fields, set this or retrieve from user status
+  const latestGameIdRef = useRef<number>(-1);
   const isPremiumUser = false;
 
   useEffect(() => {
-    let latestGameId = -1;
-  
     const fetchGameStats = async () => {
       try {
-        const response = await fetch("/api/game_stats?ts=" + Date.now(), {
+        const response = await fetch(`/api/game_stats?ts=${Date.now()}`, {
           cache: "no-store",
         });
-  
+
         const data = await response.json();
         if (!Array.isArray(data)) {
-          console.warn("⚠️ No game stats array found in API response.");
+          console.warn("⚠️ Invalid API response format.");
           setLoading(false);
           return;
         }
-  
+
         const formattedGames = data.map((game: GameStats) => {
           let safePlayers = game.players;
+          let safeMap = game.map;
+
           if (typeof safePlayers === "string") {
             try {
               safePlayers = JSON.parse(safePlayers);
             } catch {}
           }
-  
-          let safeMap = game.map;
+
           if (typeof safeMap === "string") {
             try {
               safeMap = JSON.parse(safeMap);
             } catch {}
           }
-  
-          return {
-            ...game,
-            players: safePlayers,
-            map: safeMap,
-          };
+
+          return { ...game, players: safePlayers, map: safeMap };
         });
-  
+
         const validGames = formattedGames.filter(
           (g) => g.players && g.players.length > 0
         );
+
         if (validGames.length === 0) {
-          console.warn("⚠️ All parsed games have empty player lists.");
+          console.warn("⚠️ No valid games found.");
           setLoading(false);
           return;
         }
-  
-        // Only update state if there's a new game
-        const newestId = validGames[0]?.id ?? -1;
-        if (newestId !== latestGameId) {
-          latestGameId = newestId;
+
+        const newestId = validGames[0].id;
+        if (newestId !== latestGameIdRef.current) {
+          latestGameIdRef.current = newestId;
           setGames(validGames);
-          console.log("🔁 Updated game list with latest ID:", newestId);
+          console.log("🔁 Game list updated. Latest ID:", newestId);
         }
+
         setLoading(false);
       } catch (err) {
-        console.error("❌ Error fetching game stats:", err);
+        console.error("❌ Failed to fetch game stats:", err);
         setLoading(false);
       }
     };
-  
+
     fetchGameStats();
     const interval = setInterval(fetchGameStats, 3000);
     return () => clearInterval(interval);
   }, []);
-  
 
-  function showStat<T extends string | number>(
-    actualValue: T,
-    suffix?: string
-  ): React.ReactNode {
-    // Only reveal real stats if premium
+  const showStat = <T extends string | number>(val: T, suffix?: string) => {
     return isPremiumUser ? (
       <>
-        {actualValue}
+        {val}
         {suffix ? ` ${suffix}` : ""}
       </>
     ) : (
       <span className="text-gray-400 italic">Premium Stats</span>
     );
-  }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -169,9 +156,6 @@ const GameStatsPage = () => {
       ) : (
         <div className="space-y-6">
           {games.map((game, index) => {
-            // index=0 => newest => "🔥 Latest Match"
-            // index=1 => "Previous Match #1"
-            // index=2 => "Previous Match #2"
             const isLatest = index === 0;
             const matchNumber = games.length - index;
             const cleanedDuration = sanitizeDuration(game.duration);
@@ -188,16 +172,12 @@ const GameStatsPage = () => {
                 <h3 className="text-2xl font-semibold">
                   {isLatest
                     ? "🔥 Latest Match"
-                    : `Previous Match #${matchNumber}`
-                  }
+                    : `Previous Match #${matchNumber}`}
                 </h3>
 
                 <p className="text-lg">
                   <strong>Game Version:</strong>{" "}
-                  {typeof game.game_version === "string" 
-                  ? game.game_version.replace("Version.", "") 
-                  : JSON.stringify(game.game_version)}
-
+                  {game.game_version?.replace("Version.", "") || "Unknown"}
                 </p>
                 <p className="text-lg">
                   <strong>Map:</strong>{" "}
@@ -254,7 +234,7 @@ const GameStatsPage = () => {
                         {showStat(player.society_score)}
                       </p>
                       <p>
-                        <strong className="italic">More</strong>{" "}
+                        <strong className="italic">More:</strong>{" "}
                         {showStat(player.units_killed)}
                       </p>
                     </div>
@@ -263,8 +243,7 @@ const GameStatsPage = () => {
 
                 {!game.players.some((p) => p.winner) && (
                   <p className="text-red-500 italic mt-4">
-                    ⚠️ No winner detected. Match likely ended in Out of Sync.
-                    All bets refunded.
+                    ⚠️ No winner detected. Likely Out of Sync. Bets refunded.
                   </p>
                 )}
               </div>

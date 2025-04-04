@@ -43,6 +43,7 @@ services:
     environment:
       - FLASK_ENV=development
       - FLASK_API_URL=http://aoe2-backend:8002/api/parse_replay
+      - DATABASE_URL=postgresql://aoe2user:secretpassword@aoe2-postgres:5432/aoe2db
     command: ["python", "app.py"]
     depends_on:
       db:
