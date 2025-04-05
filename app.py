@@ -11,7 +11,7 @@ import json
 import pathlib
 from datetime import datetime
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from sqlalchemy import text, Index
@@ -25,7 +25,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # Fix for deprecated postgres:// URLs
 raw_db_url = os.environ.get(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@aoe2-postgres:5432/aoe2"  # Docker default
+    "postgresql://postgres:postgres@aoe2-postgres:5432/aoe2"
 )
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
@@ -33,7 +33,7 @@ if raw_db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Optional: Add SSL if Render is detected
+# Optional: Enable SSL on Render
 if "RENDER" in os.environ or "render.com" in raw_db_url:
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "connect_args": {"sslmode": "require"}
@@ -91,7 +91,7 @@ def index():
     return "API is live"
 
 ###############################################################################
-# HELPER - parse replay from disk (legacy or alternate flow)
+# HELPER - parse replay from disk (optional legacy method)
 ###############################################################################
 def parse_replay_full(replay_path):
     if not os.path.exists(replay_path):
@@ -244,7 +244,9 @@ def game_stats():
             "played_on": g.played_on.isoformat() if g.played_on else None
         })
 
-    return jsonify(results)
+    response = make_response(jsonify(results))
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 ###############################################################################
 # RUN
