@@ -69,7 +69,7 @@ const GameStatsPage = () => {
   const router = useRouter();
   const [games, setGames] = useState<GameStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const latestGameIdRef = useRef<number>(-1);
+  const latestGameIdRef = useRef<string | null>(null);
   const isPremiumUser = false;
 
   useEffect(() => {
@@ -115,9 +115,10 @@ const GameStatsPage = () => {
           return;
         }
 
-        const newestId = validGames[0].id;
-        if (newestId !== latestGameIdRef.current) {
-          latestGameIdRef.current = newestId;
+        const newestHash = validGames[0].replay_hash;
+        if (newestHash !== latestGameIdRef.current) {
+          latestGameIdRef.current = newestHash;
+
           setGames(validGames);
           console.log("🔁 Game list updated. Latest ID:", newestId);
         }
