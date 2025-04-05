@@ -170,7 +170,9 @@ def parse_new_replay():
     replay_path = data.get("replay_file")
     replay_hash = data.get("replay_hash")
     parse_iteration = int(data.get("parse_iteration", 0))
-    is_final = bool(data.get("is_final", False))
+    is_final = bool(data.get("is_final", False))  # <-- ✅
+
+    logging.info(f"📝 Received replay: {replay_path} | Final: {is_final} | Iteration: {parse_iteration}")  # <-- ✅ Add this
 
     if not replay_path or not replay_hash:
         return jsonify({"error": "Missing replay_file or replay_hash."}), 400
@@ -213,24 +215,38 @@ def parse_new_replay():
 ###############################################################################
 @app.route("/api/game_stats", methods=["GET"])
 def game_stats():
-    games = GameStats.query.filter_by(is_final=True).order_by(GameStats.played_on.desc().nullslast()).all()
+    mode = request.args.get("mode", "final")
+
+    if mode == "latest":
+        # Get only latest parse_iteration per replay_hash
+        subquery = db.session.query(
+            GameStats.replay_hash,
+            db.func.max(GameStats.parse_iteration).label("max_iter")
+        ).group_by(GameStats.replay_hash).subquery()
+
+        games = db.session.query(GameStats).join(
+            subquery,
+            (GameStats.replay_hash == subquery.c.replay_hash) &
+            (GameStats.parse_iteration == subquery.c.max_iter)
+        ).order_by(GameStats.played_on.desc().nullslast()).all()
+    else:
+        # Default mode: only is_final=True
+        games = GameStats.query.filter_by(is_final=True).order_by(GameStats.played_on.desc().nullslast()).all()
+
     results = []
     for g in games:
         try:
             game_map = json.loads(g.map or "{}")
         except:
             game_map = {}
-
         try:
             players = json.loads(g.players or "[]")
         except:
             players = []
-
         try:
             event_types = json.loads(g.event_types or "[]")
         except:
             event_types = []
-
         try:
             key_events = json.loads(g.key_events or "[]")
         except:
@@ -257,6 +273,7 @@ def game_stats():
     response = make_response(jsonify(results))
     response.headers["Cache-Control"] = "no-store"
     return response
+
 
 ###############################################################################
 # RUN
