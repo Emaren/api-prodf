@@ -30,6 +30,7 @@ interface GameStats {
   duration: number;
   players: PlayerStats[];
   timestamp: string;
+  replay_hash: string; // ✅ Required for refresh check
 }
 
 // --- Helpers ---
@@ -69,7 +70,7 @@ const GameStatsPage = () => {
   const router = useRouter();
   const [games, setGames] = useState<GameStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const latestGameIdRef = useRef<string | null>(null);
+  const latestHashRef = useRef<string | null>(null);
   const isPremiumUser = false;
 
   useEffect(() => {
@@ -116,11 +117,10 @@ const GameStatsPage = () => {
         }
 
         const newestHash = validGames[0].replay_hash;
-        if (newestHash !== latestGameIdRef.current) {
-          latestGameIdRef.current = newestHash;
-
+        if (newestHash !== latestHashRef.current) {
+          latestHashRef.current = newestHash;
           setGames(validGames);
-          console.log("🔁 Game list updated. Latest ID:", newestId);
+          console.log("🔁 Game list updated. Latest replay_hash:", newestHash);
         }
 
         setLoading(false);

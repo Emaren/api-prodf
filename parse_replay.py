@@ -1,6 +1,7 @@
 ###############################################################################
-# parse_replay.py (Finalized Version - Supports HD & DE with replay hash de-dupe)
+# parse_replay.py (Final Version - HD & DE support, hash dedupe, ready for watcher)
 ###############################################################################
+
 import os
 import io
 import json
@@ -15,19 +16,19 @@ import mgz_hd
 from mgz_hd import header, summary
 from mgz_hd.fast.actions import parse_action_71094
 
+from config import load_config, get_flask_api_url
+
 print("Using mgz_hd from:", mgz_hd.__file__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-from config import load_config
-import os
-
-from config import get_flask_api_url
 FLASK_API_URL = get_flask_api_url()
+
 
 def format_duration(seconds: int) -> str:
     minutes, secs = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
     return f"{hours}h {minutes}m {secs}s" if hours else f"{minutes}m {secs}s"
+
 
 def extract_datetime_from_filename(filename: str):
     match = re.search(r"@(\d{4})\.(\d{2})\.(\d{2}) (\d{6})", filename)
@@ -36,6 +37,7 @@ def extract_datetime_from_filename(filename: str):
         date_str = "-".join(date_part)
         return datetime.strptime(f"{date_str} {time_part}", "%Y-%m-%d %H%M%S")
     return None
+
 
 def infer_resign_winner(file_bytes, players):
     if len(players) != 2:
@@ -62,9 +64,11 @@ def infer_resign_winner(file_bytes, players):
             return 1 - loser_index
     return None
 
+
 def hash_replay_file(path):
     with open(path, 'rb') as f:
         return hashlib.sha256(f.read()).hexdigest()
+
 
 def parse_de_replay(file_bytes):
     stats = {}
@@ -77,6 +81,7 @@ def parse_de_replay(file_bytes):
         raw_duration = s.get_duration()
         if raw_duration > 48 * 3600:
             raw_duration //= 1000
+
         stats.update({
             "duration": raw_duration,
             "game_duration": format_duration(raw_duration),
@@ -105,8 +110,10 @@ def parse_de_replay(file_bytes):
                 players[1 - resign_winner]["winner"] = False
                 winner = players[resign_winner]["name"]
 
-        stats["players"], stats["winner"] = players, winner or "Unknown"
+        stats["players"] = players
+        stats["winner"] = winner or "Unknown"
     return stats
+
 
 def parse_replay(replay_path: str, parse_iteration=0, is_final=False) -> dict:
     if not os.path.exists(replay_path):
@@ -136,14 +143,14 @@ def parse_replay(replay_path: str, parse_iteration=0, is_final=False) -> dict:
     stats["is_final"] = is_final
     stats["replay_hash"] = hash_replay_file(replay_path)
 
-    debug_path = replay_path + ".json"
     try:
-        with open(debug_path, "w") as f:
+        with open(replay_path + ".json", "w") as f:
             json.dump(stats, f, indent=4)
     except Exception as e:
         logging.warning(f"❌ Debug JSON write failed: {e}")
 
     return stats
+
 
 def send_to_api(parsed_data: dict):
     targets = load_config().get("api_targets", ["local"])
@@ -191,10 +198,10 @@ def get_default_replay_dirs():
 
     return [d for d in dirs if os.path.isdir(d)]
 
+
 if __name__ == "__main__":
     SAVEGAME_DIRS = get_default_replay_dirs()
     SAVEGAME_DIR = SAVEGAME_DIRS[0] if SAVEGAME_DIRS else "/replays"
-
     logging.info(f"📁 Using replay dir: {SAVEGAME_DIR}")
 
     replays = [f for f in os.listdir(SAVEGAME_DIR) if f.endswith(".aoe2record") or f.endswith(".mgz")]

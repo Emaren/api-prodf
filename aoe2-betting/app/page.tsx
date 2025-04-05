@@ -108,6 +108,13 @@ export default function MainPage() {
             </button>
             <button
               className="w-full text-left px-4 py-2 hover:bg-gray-700"
+              onClick={() => router.push("/replay-parser")}
+            >
+              🧪 Parse Replay (Manual)
+            </button>
+
+            <button
+              className="w-full text-left px-4 py-2 hover:bg-gray-700"
               onClick={() => router.push("/pending-bets")}
             >
               📌 Pending Bets ({pendingBets.length})

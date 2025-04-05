@@ -2,6 +2,19 @@ import json
 import os
 from dotenv import load_dotenv
 
+# ✅ Step 1: Prefer .env.override if exists
+override_path = os.path.join(os.path.dirname(__file__), "aoe2-betting", ".env.override")
+if os.path.exists(override_path):
+    load_dotenv(dotenv_path=override_path)
+    print("✅ Loaded override from .env.override")
+else:
+    # Fallback: .env or .env.production
+    ENV = os.getenv("ENV", "development")
+    env_file = ".env.production" if ENV == "production" else ".env"
+    env_path = os.path.join(os.path.dirname(__file__), "aoe2-betting", env_file)
+    load_dotenv(dotenv_path=env_path)
+    print(f"✅ Loaded environment: {ENV} from {env_file}")
+
 # Detect environment (default: development)
 ENV = os.getenv("ENV", "development")
 

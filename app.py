@@ -10,6 +10,7 @@ import logging
 import json
 import pathlib
 from datetime import datetime
+from werkzeug.utils import secure_filename
 
 from flask import Flask, jsonify, request, make_response
 from flask_sqlalchemy import SQLAlchemy
@@ -22,15 +23,24 @@ from sqlalchemy import text, Index
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Fix for deprecated postgres:// URLs
-raw_db_url = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@aoe2-postgres:5432/aoe2"
-)
+# ✅ Use DATABASE_URL if available
+raw_db_url = os.environ.get("DATABASE_URL")
+
+# ✅ Otherwise build manually from parts with fallback defaults
+if not raw_db_url:
+    user = os.getenv("PGUSER", "postgres")
+    pw = os.getenv("PGPASSWORD", "postgres")
+    host = os.getenv("PGHOST", "localhost")
+    port = os.getenv("PGPORT", "5432")  # <- default to string '5432'
+    dbname = os.getenv("PGDATABASE", "aoe2")
+    raw_db_url = f"postgresql://{user}:{pw}@{host}:{port}/{dbname}"
+
+# ✅ Fix deprecated scheme
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
+
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Optional: Enable SSL on Render
@@ -273,6 +283,64 @@ def game_stats():
     response = make_response(jsonify(results))
     response.headers["Cache-Control"] = "no-store"
     return response
+
+def hash_replay_file(path):
+    import hashlib
+    with open(path, 'rb') as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+@app.route("/api/upload_replay", methods=["POST"])
+def upload_replay():
+    if 'file' not in request.files:
+        return jsonify({"error": "Missing file in form data"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No filename provided"}), 400
+
+    filename = secure_filename(file.filename)
+    temp_path = os.path.join("/tmp", filename)
+    file.save(temp_path)
+
+    # Parse and forward to DB
+    parsed = parse_replay_full(temp_path)
+    if not parsed:
+        return jsonify({"error": "Failed to parse replay"}), 500
+
+    parsed["replay_file"] = temp_path
+    parsed["replay_hash"] = hash_replay_file(temp_path)
+    parsed["parse_iteration"] = 1
+    parsed["is_final"] = True
+
+    # Save to DB
+    try:
+        new_game = GameStats(
+            replay_file=parsed["replay_file"],
+            replay_hash=parsed["replay_hash"],
+            game_version=parsed.get("game_version"),
+            map=json.dumps({
+                "name": parsed.get("map", {}).get("name", "Unknown"),
+                "size": parsed.get("map", {}).get("size", "Unknown")
+            }),
+            game_type=parsed.get("game_type"),
+            duration=parsed.get("duration", 0),
+            winner=parsed.get("winner", "Unknown"),
+            players=json.dumps(parsed.get("players", [])),
+            event_types="[]",
+            key_events="[]",
+            parse_iteration=parsed["parse_iteration"],
+            is_final=parsed["is_final"],
+            played_on=datetime.fromisoformat(parsed["played_on"]) if parsed.get("played_on") else None
+        )
+        db.session.add(new_game)
+        db.session.commit()
+    except Exception as e:
+        logging.error(f"❌ Upload DB commit failed: {e}")
+        return jsonify({"error": "DB insert failed"}), 500
+
+    return jsonify({"message": "Replay uploaded and stored."}), 200
+
+
 
 
 ###############################################################################
