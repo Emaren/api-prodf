@@ -90,6 +90,16 @@ with app.app_context():
 def index():
     return "API is live"
 
+@app.route("/debug/game_count")
+def debug_count():
+    total = GameStats.query.count()
+    finals = GameStats.query.filter_by(is_final=True).count()
+    return jsonify({
+        "total_games": total,
+        "final_games": finals
+    })
+
+
 ###############################################################################
 # HELPER - parse replay from disk (optional legacy method)
 ###############################################################################
