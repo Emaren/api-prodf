@@ -44,6 +44,8 @@ services:
       - FLASK_ENV=development
       - FLASK_API_URL=http://aoe2-backend:8002/api/parse_replay
       - DATABASE_URL=postgresql://aoe2user:secretpassword@aoe2-postgres:5432/aoe2db
+      - ADMIN_TOKEN=your-secret-token
+      - ENABLE_DEV_ENDPOINTS=true
     command: ["python", "app.py"]
     depends_on:
       db:
@@ -59,6 +61,20 @@ services:
       - backend
     env_file:
       - ./aoe2-betting/.env
+
+  frontend-dev:
+    build:
+      context: ./aoe2-betting
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./aoe2-betting:/app
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+    depends_on:
+      - backend
 
 volumes:
   aoe2db_data:

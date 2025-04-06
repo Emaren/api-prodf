@@ -1,196 +1,76 @@
 """
-app.py
-Your Flask + SQLAlchemy backend for storing replay parse results.
+app.py — Flask + SQLAlchemy backend for storing replay parse results.
 """
 
 import os
-import io
-import time
 import logging
 import json
-import pathlib
 from datetime import datetime
+from flask import Flask, jsonify, request, make_response, abort
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
-from flask import Flask, jsonify, request, make_response
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from sqlalchemy import text, Index
+from models import GameStats, User
+from db import db, init_db
+from utils.replay_parser import parse_replay_full, hash_replay_file
 
-###############################################################################
+# ─────────────────────────────────────────────────────────────────────────────
 # FLASK SETUP
-###############################################################################
+# ─────────────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# ✅ Use DATABASE_URL if available
-raw_db_url = os.environ.get("DATABASE_URL")
-
-# ✅ Otherwise build manually from parts with fallback defaults
+# Database config
+raw_db_url = os.getenv("DATABASE_URL")
 if not raw_db_url:
     user = os.getenv("PGUSER", "postgres")
     pw = os.getenv("PGPASSWORD", "postgres")
     host = os.getenv("PGHOST", "localhost")
-    port = os.getenv("PGPORT", "5432")  # <- default to string '5432'
+    port = os.getenv("PGPORT", "5432")
     dbname = os.getenv("PGDATABASE", "aoe2")
     raw_db_url = f"postgresql://{user}:{pw}@{host}:{port}/{dbname}"
-
-# ✅ Fix deprecated scheme
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
-
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-# Optional: Enable SSL on Render
 if "RENDER" in os.environ or "render.com" in raw_db_url:
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "connect_args": {"sslmode": "require"}
-    }
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"sslmode": "require"}}
 
-db = SQLAlchemy(app)
+init_db(app)
 
-###############################################################################
-# DATABASE MODEL
-###############################################################################
-class GameStats(db.Model):
-    __tablename__ = "game_stats"
-
-    id = db.Column(db.Integer, primary_key=True)
-    replay_file = db.Column(db.String(500), nullable=False)
-    replay_hash = db.Column(db.String(64), nullable=False)
-
-    game_version = db.Column(db.String(50))
-    map = db.Column(db.String(100))
-    game_type = db.Column(db.String(50))
-    duration = db.Column(db.Integer)
-    winner = db.Column(db.String(100))
-    players = db.Column(db.Text)
-    event_types = db.Column(db.Text)
-    key_events = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-    played_on = db.Column(db.DateTime, nullable=True)
-
-    parse_iteration = db.Column(db.Integer, default=0)
-    is_final = db.Column(db.Boolean, default=False)
-
-Index("ix_replay_iteration", GameStats.replay_file, GameStats.parse_iteration)
-Index("ix_replay_hash_iteration", GameStats.replay_hash, GameStats.parse_iteration)
-
-###############################################################################
-# DB INIT
-###############################################################################
-with app.app_context():
-    for attempt in range(10):
-        try:
-            db.session.execute(text("SELECT 1"))
-            break
-        except Exception:
-            logging.warning(f"⏳ DB not ready (attempt {attempt+1}/10), retrying in 3s...")
-            time.sleep(3)
-    else:
-        logging.error("❌ Database did not become ready in time.")
-        exit(1)
-
-    db.create_all()
-    logging.info("✅ Tables created or verified existing.")
-
+# ─────────────────────────────────────────────────────────────────────────────
+# ROUTES
+# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return "API is live"
 
 @app.route("/debug/game_count")
 def debug_count():
-    total = GameStats.query.count()
-    finals = GameStats.query.filter_by(is_final=True).count()
     return jsonify({
-        "total_games": total,
-        "final_games": finals
+        "total_games": GameStats.query.count(),
+        "final_games": GameStats.query.filter_by(is_final=True).count()
     })
 
-
-###############################################################################
-# HELPER - parse replay from disk (optional legacy method)
-###############################################################################
-def parse_replay_full(replay_path):
-    if not os.path.exists(replay_path):
-        logging.error(f"❌ Replay not found: {replay_path}")
-        return None
-
-    try:
-        from mgz import header, summary
-        with open(replay_path, "rb") as f:
-            file_bytes = f.read()
-
-        h = header.parse(file_bytes)
-        s = summary.Summary(io.BytesIO(file_bytes))
-
-        stats = {
-            "game_version": str(h.version),
-            "map": {
-                "name": s.get_map().get("name", "Unknown"),
-                "size": s.get_map().get("size", "Unknown"),
-            },
-            "game_type": str(s.get_version()),
-            "duration": int(s.get_duration() // 1000 if s.get_duration() > 48 * 3600 else s.get_duration()),
-        }
-
-        players = []
-        winner = None
-        for p in s.get_players():
-            p_data = {
-                "name": p.get("name", "Unknown"),
-                "civilization": p.get("civilization", "Unknown"),
-                "winner": p.get("winner", False),
-                "score": p.get("score", 0),
-            }
-            players.append(p_data)
-            if p_data["winner"]:
-                winner = p_data["name"]
-
-        stats["players"] = players
-        stats["winner"] = winner or "Unknown"
-        dt = extract_datetime_from_filename(os.path.basename(replay_path))
-        stats["played_on"] = dt.isoformat() if dt else None
-
-        logging.info(f"✅ parse_replay_full => {replay_path}")
-        return stats
-
-    except Exception as e:
-        logging.error(f"❌ parse error: {e}")
-        return None
-
-def extract_datetime_from_filename(fname):
-    import re
-    match = re.search(r"@(\d{4})\.(\d{2})\.(\d{2}) (\d{6})", fname)
-    if match:
-        try:
-            return datetime.strptime(f"{match.group(1)}-{match.group(2)}-{match.group(3)} {match.group(4)}", "%Y-%m-%d %H%M%S")
-        except ValueError:
-            return None
-    return None
-
-###############################################################################
-# API ROUTE: /api/parse_replay
-###############################################################################
 @app.route("/api/parse_replay", methods=["POST"])
 def parse_new_replay():
     data = request.json
     replay_path = data.get("replay_file")
     replay_hash = data.get("replay_hash")
     parse_iteration = int(data.get("parse_iteration", 0))
-    is_final = bool(data.get("is_final", False))  # <-- ✅
+    is_final = bool(data.get("is_final", False))
 
-    logging.info(f"📝 Received replay: {replay_path} | Final: {is_final} | Iteration: {parse_iteration}")  # <-- ✅ Add this
+    logging.info(f"📝 Received replay: {replay_path} | Final: {is_final} | Iteration: {parse_iteration}")
 
     if not replay_path or not replay_hash:
         return jsonify({"error": "Missing replay_file or replay_hash."}), 400
 
-    existing_final = GameStats.query.filter_by(replay_hash=replay_hash, is_final=True).first()
-    if is_final and existing_final:
-        logging.info(f"⏭️ Skipped: Final already stored for hash {replay_hash}")
-        return jsonify({"message": "Replay already parsed as final. Skipped."}), 200
+    if is_final:
+        existing_final = GameStats.query.filter_by(replay_hash=replay_hash, is_final=True).first()
+        if existing_final:
+            logging.info(f"⏭️ Skipped: Final already stored for hash {replay_hash}")
+            return jsonify({"message": "Replay already parsed as final. Skipped."}), 200
 
     new_game = GameStats(
         replay_file=replay_path,
@@ -214,21 +94,27 @@ def parse_new_replay():
     try:
         db.session.add(new_game)
         db.session.commit()
+
+        player_names = [p.get("name") for p in data.get("players", [])]
+        matched_users = db.session.query(User).filter(User.in_game_name.in_(player_names)).all()
+        for user in matched_users:
+            if not user.verified:
+                user.verified = True
+                logging.info(f"✅ Verified user: {user.uid} ({user.in_game_name})")
+            user.lock_name = not is_final
+        db.session.commit()
+
     except Exception as e:
         logging.error(f"❌ DB commit failed: {e}")
         return jsonify({"error": "DB insert failed"}), 500
 
     return jsonify({"message": f"Replay stored (iteration {parse_iteration})"})
 
-###############################################################################
-# API ROUTE: /api/game_stats
-###############################################################################
 @app.route("/api/game_stats", methods=["GET"])
 def game_stats():
     mode = request.args.get("mode", "final")
 
     if mode == "latest":
-        # Get only latest parse_iteration per replay_hash
         subquery = db.session.query(
             GameStats.replay_hash,
             db.func.max(GameStats.parse_iteration).label("max_iter")
@@ -240,28 +126,10 @@ def game_stats():
             (GameStats.parse_iteration == subquery.c.max_iter)
         ).order_by(GameStats.played_on.desc().nullslast()).all()
     else:
-        # Default mode: only is_final=True
         games = GameStats.query.filter_by(is_final=True).order_by(GameStats.played_on.desc().nullslast()).all()
 
     results = []
     for g in games:
-        try:
-            game_map = json.loads(g.map or "{}")
-        except:
-            game_map = {}
-        try:
-            players = json.loads(g.players or "[]")
-        except:
-            players = []
-        try:
-            event_types = json.loads(g.event_types or "[]")
-        except:
-            event_types = []
-        try:
-            key_events = json.loads(g.key_events or "[]")
-        except:
-            key_events = []
-
         results.append({
             "id": g.id,
             "replay_file": g.replay_file,
@@ -269,13 +137,13 @@ def game_stats():
             "parse_iteration": g.parse_iteration,
             "is_final": g.is_final,
             "game_version": g.game_version,
-            "map": game_map,
+            "map": json.loads(g.map or "{}"),
             "game_type": g.game_type,
             "duration": g.duration,
             "winner": g.winner,
-            "players": players,
-            "event_types": event_types,
-            "key_events": key_events,
+            "players": json.loads(g.players or "[]"),
+            "event_types": json.loads(g.event_types or "[]"),
+            "key_events": json.loads(g.key_events or "[]"),
             "timestamp": g.timestamp.isoformat(),
             "played_on": g.played_on.isoformat() if g.played_on else None
         })
@@ -283,11 +151,6 @@ def game_stats():
     response = make_response(jsonify(results))
     response.headers["Cache-Control"] = "no-store"
     return response
-
-def hash_replay_file(path):
-    import hashlib
-    with open(path, 'rb') as f:
-        return hashlib.sha256(f.read()).hexdigest()
 
 @app.route("/api/upload_replay", methods=["POST"])
 def upload_replay():
@@ -302,7 +165,6 @@ def upload_replay():
     temp_path = os.path.join("/tmp", filename)
     file.save(temp_path)
 
-    # Parse and forward to DB
     parsed = parse_replay_full(temp_path)
     if not parsed:
         return jsonify({"error": "Failed to parse replay"}), 500
@@ -312,16 +174,12 @@ def upload_replay():
     parsed["parse_iteration"] = 1
     parsed["is_final"] = True
 
-    # Save to DB
     try:
         new_game = GameStats(
             replay_file=parsed["replay_file"],
             replay_hash=parsed["replay_hash"],
             game_version=parsed.get("game_version"),
-            map=json.dumps({
-                "name": parsed.get("map", {}).get("name", "Unknown"),
-                "size": parsed.get("map", {}).get("size", "Unknown")
-            }),
+            map=json.dumps(parsed.get("map", {})),
             game_type=parsed.get("game_type"),
             duration=parsed.get("duration", 0),
             winner=parsed.get("winner", "Unknown"),
@@ -340,12 +198,137 @@ def upload_replay():
 
     return jsonify({"message": "Replay uploaded and stored."}), 200
 
+@app.route("/debug/delete_all", methods=["DELETE"])
+def delete_all():
+    if os.getenv("ENABLE_DEV_ENDPOINTS") != "true":
+        return jsonify({"error": "Debug endpoint disabled"}), 403
+    db.session.query(GameStats).delete()
+    db.session.query(User).delete()
+    db.session.commit()
+    return jsonify({"message": "All game stats and users deleted."})
 
+@app.route("/api/register_user", methods=["POST"])
+def register_user():
+    data = request.get_json()
+    uid = data.get("uid")
+    email = data.get("email")
+    in_game_name = data.get("in_game_name")
 
+    if not uid:
+        return jsonify({"error": "Missing uid"}), 400
 
-###############################################################################
+    existing = db.session.query(User).filter_by(uid=uid).first()
+    if existing:
+        return jsonify({"message": "User already exists"}), 200
+
+    new_user = User(uid=uid, email=email, in_game_name=in_game_name, verified=False)
+    db.session.add(new_user)
+    db.session.commit()
+    db.session.refresh(new_user)
+
+    return jsonify({"message": "User registered", "user": {
+        "uid": new_user.uid,
+        "email": new_user.email,
+        "in_game_name": new_user.in_game_name,
+        "verified": new_user.verified
+    }})
+
+@app.route("/api/user/me", methods=["POST"])
+def get_user_by_uid():
+    data = request.get_json()
+    uid = data.get("uid")
+    if not uid:
+        return jsonify({"error": "Missing uid"}), 400
+
+    user = db.session.query(User).filter_by(uid=uid).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({
+        "uid": user.uid,
+        "email": user.email,
+        "in_game_name": user.in_game_name,
+        "verified": user.verified,
+        "wallet_address": user.wallet_address,
+        "lock_name": user.lock_name
+    })
+
+@app.route("/api/user/update_name", methods=["POST"])
+def update_player_name():
+    data = request.get_json()
+    uid = data.get("uid")
+    new_name = data.get("in_game_name")
+
+    if not uid or not new_name:
+        return jsonify({"error": "Missing uid or name"}), 400
+
+    user = db.session.query(User).filter_by(uid=uid).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if user.lock_name:
+        return jsonify({"error": "Name change is locked during a match."}), 403
+
+    active_match = db.session.query(GameStats).filter(
+        GameStats.is_final == False,
+        GameStats.players.ilike(f"%{user.in_game_name}%")
+    ).first()
+
+    if active_match:
+        return jsonify({"error": "Cannot change name during an active match."}), 403
+
+    user.in_game_name = new_name
+    db.session.commit()
+    return jsonify({"message": "Name updated", "verified": user.verified})
+
+@app.route("/api/user/update_wallet", methods=["POST"])
+def update_wallet():
+    data = request.get_json()
+    uid = data.get("uid")
+    wallet = data.get("wallet_address")
+
+    if not uid or not wallet:
+        return jsonify({"error": "Missing uid or wallet_address"}), 400
+
+    user = db.session.query(User).filter_by(uid=uid).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    user.wallet_address = wallet
+    db.session.commit()
+    return jsonify({"message": "Wallet address updated"})
+
+@app.route("/admin/users", methods=["GET"])
+def list_users():
+    token = request.headers.get("Authorization")
+    if token != f"Bearer {os.getenv('ADMIN_TOKEN', 'secretadmin')}":
+        abort(401, description="Unauthorized")
+
+    users = User.query.all()
+    return jsonify([
+        {
+            "uid": u.uid,
+            "email": u.email,
+            "in_game_name": u.in_game_name,
+            "verified": u.verified,
+            "created_at": u.created_at.isoformat()
+        } for u in users
+    ])
+
+@app.route("/api/online_users")
+def get_online_users():
+    users = db.session.query(User).filter(User.in_game_name.isnot(None)).all()
+    return jsonify([
+        {
+            "uid": u.uid,
+            "in_game_name": u.in_game_name,
+            "verified": u.verified
+        } for u in users
+    ])
+
+# ─────────────────────────────────────────────────────────────────────────────
 # RUN
-###############################################################################
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app.run(debug=True, host="0.0.0.0", port=8002)

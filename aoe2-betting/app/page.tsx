@@ -14,6 +14,8 @@ type Bet = {
   inactive?: boolean;
 };
 
+const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8002";
+console.log("🔧 API Base URL:", API);
 
 export default function MainPage() {
   const router = useRouter();
@@ -21,16 +23,34 @@ export default function MainPage() {
   const [betAmount, setBetAmount] = useState(0);
   const [challenger, setChallenger] = useState("");
   const [opponent, setOpponent] = useState("");
+  const [playerName, setPlayerName] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingBets, setPendingBets] = useState<Bet[]>([]);
-  const [betStatus, setBetStatus] = useState(""); // Tracks the animated status text
-  const [showButtons, setShowButtons] = useState(true); // Controls button visibility
+  const [betStatus, setBetStatus] = useState("");
+  const [showButtons, setShowButtons] = useState(true);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedBets = JSON.parse(localStorage.getItem("pendingBets") || "[]");
-      setPendingBets(storedBets);
+    let uid = localStorage.getItem("uid");
+    if (!uid) {
+      uid = `uid-${crypto.randomUUID()}`;
+      localStorage.setItem("uid", uid);
+      fetch(`${API}/api/register_user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, email: "", in_game_name: "" }),
+      }).then(() => console.log("🆕 User registered:", uid));
     }
+
+    const storedName = localStorage.getItem("playerName");
+    if (!storedName) {
+      setShowNamePrompt(true);
+    } else {
+      setPlayerName(storedName);
+    }
+
+    const storedBets = JSON.parse(localStorage.getItem("pendingBets") || "[]");
+    setPendingBets(storedBets);
 
     setTimeout(() => {
       setBetPending(true);
@@ -41,21 +61,17 @@ export default function MainPage() {
 
   const handleDecline = () => {
     const newBet = { challenger, betAmount, inactive: false };
+    const storedBets = JSON.parse(localStorage.getItem("pendingBets") || "[]");
 
-    if (typeof window !== "undefined") {
-      const storedBets = JSON.parse(localStorage.getItem("pendingBets") || "[]");
+    const betExists = storedBets.some(
+      (bet: { challenger: string; betAmount: number }) =>
+        bet.challenger === challenger && bet.betAmount === betAmount
+    );
 
-      // Prevent duplicate entries
-      const betExists = storedBets.some(
-        (bet: { challenger: string; betAmount: number }) =>
-          bet.challenger === challenger && bet.betAmount === betAmount
-      );      
-
-      if (!betExists) {
-        const updatedBets = [...storedBets, newBet];
-        localStorage.setItem("pendingBets", JSON.stringify(updatedBets));
-        setPendingBets(updatedBets);
-      }
+    if (!betExists) {
+      const updatedBets = [...storedBets, newBet];
+      localStorage.setItem("pendingBets", JSON.stringify(updatedBets));
+      setPendingBets(updatedBets);
     }
 
     setShowButtons(false);
@@ -75,20 +91,69 @@ export default function MainPage() {
       setBetStatus("Waiting For Battle To Start");
     }, 5000);
 
-    // Simulate detecting the game start (replace this with actual game file monitoring logic)
     setTimeout(() => {
       setBetStatus("Battle Underway!");
     }, 10000);
 
-    // Simulate detecting battle finish (replace with real in-game detection)
     setTimeout(() => {
       setBetStatus("Battle Finished! Processing Win.");
     }, 20000);
   };
 
+  const savePlayerName = async () => {
+    const trimmed = playerName.trim();
+    if (!trimmed) return alert("Enter a valid name");
+
+    localStorage.setItem("playerName", trimmed);
+    setShowNamePrompt(false);
+
+    const uid = localStorage.getItem("uid");
+    if (!uid) return alert("Missing UID");
+
+    try {
+      const res = await fetch(`${API}/api/user/update_name`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, in_game_name: trimmed }),
+      });
+
+      if (!res.ok) {
+        console.warn("⚠️ Failed to sync name to backend");
+      } else {
+        console.log("✅ Player name synced to backend:", trimmed);
+      }
+    } catch (err) {
+      console.error("❌ Error syncing name to backend:", err);
+    }
+  };
+
+  if (showNamePrompt) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-6">
+        <Card className="bg-gray-800 shadow-xl w-full max-w-md">
+          <CardContent className="p-8 flex flex-col space-y-6">
+            <h1 className="text-xl font-bold text-center">Welcome to AoE2HD Betting App</h1>
+            <p className="text-gray-300 text-center">
+              Enter your in-game name to start betting:
+            </p>
+            <Input
+              className="text-black px-4 py-3 text-lg rounded-md"
+              placeholder="Your Steam/In-Game Name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+            />
+            <Button onClick={savePlayerName} className="w-full bg-blue-600 hover:bg-blue-700 py-3">
+              Continue
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full min-h-screen flex flex-col bg-gray-900 text-white">
-      {/* Top Right "My Account" Button + Dropdown */}
+      {/* My Account Menu */}
       <div className="absolute top-4 right-4 z-50">
         <button
           className="bg-gray-700 hover:bg-gray-600 flex items-center gap-2 px-5 py-3 text-lg rounded-lg shadow-md"
@@ -97,65 +162,46 @@ export default function MainPage() {
           <UserCircle className="w-6 h-6" />
           My Account
         </button>
-
         {menuOpen && (
           <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-700"
-              onClick={() => router.push("/profile")}
-            >
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/profile")}>
               👤 Profile
             </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-700"
-              onClick={() => router.push("/replay-parser")}
-            >
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/admin/user-list")}>
+              🛡️ Admin: User List
+            </button>
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/users")}>
+              👥 Online Users
+            </button>
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/replay-parser")}>
               🧪 Parse Replay (Manual)
             </button>
-
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-700"
-              onClick={() => router.push("/pending-bets")}
-            >
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/pending-bets")}>
               📌 Pending Bets ({pendingBets.length})
             </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-700"
-              onClick={() => router.push("/upload")}
-            >
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/upload")}>
               📤 Upload Replay
             </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-700"
-              onClick={() => router.push("/game-stats")}
-            >
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/game-stats")}>
               📊 Game Stats
             </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-700"
-              onClick={() => router.push("/past-earnings")}
-            >
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/past-earnings")}>
               💰 Past Earnings
             </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-700"
-              onClick={() => router.push("/settings")}
-            >
+            <button className="w-full text-left px-4 py-2 hover:bg-gray-700" onClick={() => router.push("/settings")}>
               ⚙️ Settings
             </button>
           </div>
         )}
       </div>
 
-      {/* Crypto Wallet Icon - Bottom Right */}
+      {/* Wallet */}
       <button className="fixed bottom-6 right-6 bg-gray-700 hover:bg-gray-600 p-4 rounded-full shadow-md">
         <Wallet className="w-7 h-7" />
       </button>
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 items-center justify-center px-6 w-full max-w-2xl mx-auto space-y-14">
-        
-        {/* Glowing AoE2 Icon */}
         <motion.div
           animate={{
             opacity: betPending ? 1 : 0.8,
@@ -173,15 +219,13 @@ export default function MainPage() {
           )}
         </motion.div>
 
-        {/* Opponent Challenge Section */}
+        {/* Bet Interface */}
         <Card className="w-full max-w-lg bg-gray-800 text-white shadow-xl rounded-lg">
           <CardContent className="p-8 flex flex-col items-center space-y-6">
             {betPending ? (
-              <>
-                <div className="text-2xl font-semibold text-center">
-                  <span className="text-blue-400">{challenger}</span> has challenged you!
-                </div>
-              </>
+              <div className="text-2xl font-semibold text-center">
+                <span className="text-blue-400">{challenger}</span> has challenged you!
+              </div>
             ) : (
               <>
                 <p className="text-gray-400 text-lg">Enter Opponent's Name:</p>
@@ -199,7 +243,7 @@ export default function MainPage() {
           </CardContent>
         </Card>
 
-        {/* Bet Status Text */}
+        {/* Bet Status */}
         {betStatus && (
           <motion.div
             className="text-2xl font-bold text-center bg-gray-800 px-6 py-3 rounded-lg shadow-md"
@@ -210,7 +254,6 @@ export default function MainPage() {
           </motion.div>
         )}
 
-        {/* Accept & Decline Buttons BELOW the Challenge Box */}
         <AnimatePresence>
           {betPending && showButtons && (
             <motion.div

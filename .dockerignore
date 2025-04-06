@@ -1,0 +1,29 @@
+# Ignore node modules and lock files
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-lock.yaml
+
+# Ignore version control
+.git
+.gitignore
+
+# Ignore Docker files
+Dockerfile
+.dockerignore
+
+# Ignore system and editor files
+*.swp
+*.swo
+*.DS_Store
+.vscode
+.idea
+
+# Ignore build artifacts
+.next
+dist
+build
+
+# Ignore env files (optional if you're mounting them manually)
+.env
+.env.local

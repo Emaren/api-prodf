@@ -14,8 +14,8 @@ module.exports = withPWA({
   },
 
   env: {
-    BACKEND_API: "http://192.168.219.28:8000",
-    REPLAY_API: "http://192.168.219.28:5001",
+    BACKEND_API: process.env.NEXT_PUBLIC_API_BASE_URL,
+    REPLAY_API: process.env.REPLAY_API || '', // optional
   },
 
   async rewrites() {
@@ -24,8 +24,20 @@ module.exports = withPWA({
         source: '/api/game_stats',
         destination: isDocker
           ? 'http://aoe2-backend:8002/api/game_stats'
-          : 'http://localhost:8002/api/game_stats',
+          : `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/game_stats`,
       },
+      {
+        source: '/admin/users',
+        destination: isDocker
+          ? 'http://aoe2-backend:8002/admin/users'
+          : `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin/users`,
+      },
+      {
+        source: '/api/parse_replay',
+        destination: isDocker
+          ? 'http://aoe2-backend:8002/api/parse_replay'
+          : `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/parse_replay`,
+      }
     ];
   }
 });

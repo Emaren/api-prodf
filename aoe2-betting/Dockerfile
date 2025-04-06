@@ -9,4 +9,8 @@ RUN npm install
 RUN npm run build
 
 EXPOSE 3000
-CMD ["npm", "run", "dev"]
+
+# 👇 Default to production, but allow overriding
+ENV NODE_ENV=production
+
+CMD ["sh", "-c", "if [ \"$NODE_ENV\" = 'development' ]; then npm run dev; else npm start; fi"]

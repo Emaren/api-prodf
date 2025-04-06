@@ -148,6 +148,14 @@ const GameStatsPage = () => {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="text-center mt-8">
+        <Button
+          className="bg-blue-700 hover:bg-blue-700 px-6 py-3 text-white font-semibold"
+          onClick={() => router.push("/")}
+        >
+          ⬅️ Back to Home
+        </Button>
+      </div>
       <h2 className="text-3xl font-bold text-center mb-6 text-gray-400">
         Game Stats
       </h2>
@@ -255,14 +263,7 @@ const GameStatsPage = () => {
         </div>
       )}
 
-      <div className="text-center mt-8">
-        <Button
-          className="bg-blue-700 hover:bg-blue-700 px-6 py-3 text-white font-semibold"
-          onClick={() => router.push("/")}
-        >
-          ⬅️ Back to Home
-        </Button>
-      </div>
+      
     </div>
   );
 };
