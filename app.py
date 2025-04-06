@@ -266,20 +266,23 @@ def update_player_name():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    if user.lock_name:
-        return jsonify({"error": "Name change is locked during a match."}), 403
+    # Don't check for lock or match if no current name
+    if user.in_game_name:
+        if user.lock_name:
+            return jsonify({"error": "Name change is locked during a match."}), 403
 
-    active_match = db.session.query(GameStats).filter(
-        GameStats.is_final == False,
-        GameStats.players.ilike(f"%{user.in_game_name}%")
-    ).first()
+        active_match = db.session.query(GameStats).filter(
+            GameStats.is_final == False,
+            GameStats.players.ilike(f"%{user.in_game_name}%")
+        ).first()
 
-    if active_match:
-        return jsonify({"error": "Cannot change name during an active match."}), 403
+        if active_match:
+            return jsonify({"error": "Cannot change name during an active match."}), 403
 
     user.in_game_name = new_name
     db.session.commit()
     return jsonify({"message": "Name updated", "verified": user.verified})
+
 
 @app.route("/api/user/update_wallet", methods=["POST"])
 def update_wallet():
