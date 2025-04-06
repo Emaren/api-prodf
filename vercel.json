@@ -1,11 +1,1 @@
-{
-    "builds": [
-    {
-        "src": "aoe2-betting/next.config.js",
-        "use": "@vercel/next"
-    }
-    ],
-    "outputDirectory": "aoe2-betting/out",
-    "rootDirectory": "aoe2-betting"
-  }
-  
+{ "rootDirectory": "aoe2-betting" }
