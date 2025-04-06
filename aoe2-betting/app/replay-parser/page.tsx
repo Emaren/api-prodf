@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 
-
 export default function ReplayParserPage() {
   const [status, setStatus] = useState("");
   const [fileName, setFileName] = useState("");
@@ -36,7 +35,6 @@ export default function ReplayParserPage() {
 
         await uploadReplayFile(latestFile);
       } else {
-        // Fallback to <input type="file">
         fileInputRef.current?.click();
       }
     } catch (err) {
@@ -55,16 +53,16 @@ export default function ReplayParserPage() {
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8002";
     setFileName(file.name);
     setStatus(`Uploading ${file.name}...`);
-  
+
     const formData = new FormData();
     formData.append("file", file);
-  
+
     try {
       const res = await fetch(`${API_BASE}/api/parse_replay`, {
         method: "POST",
         body: formData,
       });
-  
+
       if (res.ok) {
         setStatus(`✅ Parsed: ${file.name}`);
       } else {
@@ -76,7 +74,6 @@ export default function ReplayParserPage() {
       setStatus("❌ Upload failed.");
     }
   };
-  
 
   return (
     <div className="p-6 space-y-4 max-w-xl mx-auto">
@@ -100,26 +97,23 @@ export default function ReplayParserPage() {
         onChange={handleFileChange}
         style={{ display: "none" }}
       />
-      <br></br>
-      <br></br>
-      <br></br>
+
       <a
-        href="https://drive.google.com/uc?export=download&id=1mDb4CxcyH_9X6ERLTfKbqrD5dEN6vg8n"
+        href="https://drive.google.com/uc?export=download&id=1c-e3Qt9RrSCZVXciUbvmGEbGxH1Nt5NQ"
         target="_blank"
         rel="noopener noreferrer"
-        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg inline-block"
+        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg inline-block mt-6"
       >
-        ⬇️ Download AoE2 Watcher for macOS (.dmg)
+        ⬇️ Download AoE2 Watcher for macOS (Universal)
       </a>
-      <br />
-      <br />
-      <br />
+
       <Button
-          className="mt-4 text-lg text-gray-400 hover:text-white"
-          onClick={() => router.push("/")}
-        >
-          ← Back to Home
+        className="mt-4 text-lg text-gray-400 hover:text-white"
+        onClick={() => router.push("/")}
+      >
+        ← Back to Home
       </Button>
+
       {fileName && <p className="text-sm text-gray-600">Selected: {fileName}</p>}
       {status && <p className="text-sm mt-2">{status}</p>}
     </div>

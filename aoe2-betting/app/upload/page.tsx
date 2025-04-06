@@ -15,14 +15,16 @@ export default function UploadReplay() {
         <Button className="w-full text-xl bg-blue-600 hover:bg-blue-700 py-4">
           Submit
         </Button>
+
         <a
-          href="https://drive.google.com/uc?export=download&id=1mDb4CxcyH_9X6ERLTfKbqrD5dEN6vg8n"
+          href="https://drive.google.com/uc?export=download&id=1c-e3Qt9RrSCZVXciUbvmGEbGxH1Nt5NQ"
           target="_blank"
           rel="noopener noreferrer"
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg mt-6 inline-block"
         >
-          ⬇️ Download AoE2 Watcher for macOS (.dmg)
+          ⬇️ Download AoE2 Watcher for macOS (Universal)
         </a>
+
         <Button
           className="mt-4 text-lg text-gray-400 hover:text-white"
           onClick={() => router.push("/")}
