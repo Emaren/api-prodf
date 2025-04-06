@@ -1,11 +1,15 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+
 
 export default function ReplayParserPage() {
   const [status, setStatus] = useState("");
   const [fileName, setFileName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   const handleSelectReplay = async () => {
     try {
@@ -73,15 +77,6 @@ export default function ReplayParserPage() {
     }
   };
   
-  <a
-  href="https://drive.google.com/uc?export=download&id=1mDb4CxcyH_9X6ERLTfKbqrD5dEN6vg8n"
-  target="_blank"
-  rel="noopener noreferrer"
-  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg inline-block"
-  >
-    ⬇️ Download AoE2 Watcher for macOS (.dmg)
-  </a>
-
 
   return (
     <div className="p-6 space-y-4 max-w-xl mx-auto">
@@ -105,7 +100,26 @@ export default function ReplayParserPage() {
         onChange={handleFileChange}
         style={{ display: "none" }}
       />
-
+      <br></br>
+      <br></br>
+      <br></br>
+      <a
+        href="https://drive.google.com/uc?export=download&id=1mDb4CxcyH_9X6ERLTfKbqrD5dEN6vg8n"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg inline-block"
+      >
+        ⬇️ Download AoE2 Watcher for macOS (.dmg)
+      </a>
+      <br />
+      <br />
+      <br />
+      <Button
+          className="mt-4 text-lg text-gray-400 hover:text-white"
+          onClick={() => router.push("/")}
+        >
+          ← Back to Home
+      </Button>
       {fileName && <p className="text-sm text-gray-600">Selected: {fileName}</p>}
       {status && <p className="text-sm mt-2">{status}</p>}
     </div>
