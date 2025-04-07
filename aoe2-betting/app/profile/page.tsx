@@ -13,11 +13,35 @@ const ProfilePage = () => {
   const [playerName, setPlayerName] = useState("");
   const [isVerified, setIsVerified] = useState(false);
 
+  const fetchUser = async () => {
+    const uid = localStorage.getItem("uid");
+    if (!uid) return;
+
+    try {
+      const res = await fetch(`${API}/api/user/me`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid }),
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.in_game_name) {
+        setPlayerName(data.in_game_name);
+        localStorage.setItem("playerName", data.in_game_name);
+      }
+
+      setIsVerified(data.verified);
+    } catch (err) {
+      console.error("❌ Failed to fetch user:", err);
+    }
+  };
+
   useEffect(() => {
     let uid = localStorage.getItem("uid");
 
     const registerAndFetch = async () => {
-      // ✅ Step 1: Create new UID and register user if needed
       if (!uid) {
         uid = `uid-${crypto.randomUUID()}`;
         localStorage.setItem("uid", uid);
@@ -34,42 +58,18 @@ const ProfilePage = () => {
         }
       }
 
-      // ✅ Step 2: Try fetching user info
-      try {
-        const res = await fetch(`${API}/api/user/me`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uid }),
-        });
-
-        if (!res.ok) {
-          console.warn(`⚠️ Status ${res.status} from /user/me`);
-          if (res.status === 404) {
-            // If the user somehow doesn't exist, re-register
-            await fetch(`${API}/api/register_user`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ uid, email: "", in_game_name: "" }),
-            });
-            return;
-          }
-          throw new Error(`Status ${res.status}`);
-        }
-
-        const data = await res.json();
-        console.log("👤 User loaded:", data);
-        if (data.in_game_name) {
-          setPlayerName(data.in_game_name);
-          localStorage.setItem("playerName", data.in_game_name);
-        }
-
-        setIsVerified(data.verified);
-      } catch (err) {
-        console.error("❌ Failed to fetch user:", err);
-      }
+      await fetchUser();
     };
 
     registerAndFetch();
+
+    // ✅ Auto-refresh verified badge on tab focus
+    const handleFocus = () => {
+      console.log("🔄 Refetching verification on window focus");
+      fetchUser();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

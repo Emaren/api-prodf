@@ -160,7 +160,7 @@ export default function MainPage() {
           onClick={() => setMenuOpen(!menuOpen)}
         >
           <UserCircle className="w-6 h-6" />
-          My Account
+          My Accountt
         </button>
         {menuOpen && (
           <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg overflow-hidden">

@@ -15,25 +15,52 @@ export default function ReplayParserPage() {
       if ("showDirectoryPicker" in window) {
         setStatus("Opening folder picker...");
         const dirHandle = await (window as any).showDirectoryPicker();
-        let latestFile: File | null = null;
-        let latestModified = 0;
 
-        for await (const [name, handle] of dirHandle.entries()) {
-          if (name.endsWith(".aoe2record") && handle.kind === "file") {
-            const file = await handle.getFile();
-            if (file.lastModified > latestModified) {
-              latestModified = file.lastModified;
-              latestFile = file;
+        let lastHash = "";
+        let stableCount = 0;
+        const MIN_SIZE = 150_000;
+        const MAX_STABLE = 3;
+        const POLL_INTERVAL = 10_000;
+
+        setStatus("Watching folder for new replays...");
+
+        setInterval(async () => {
+          let latestFile: File | null = null;
+          let latestModified = 0;
+
+          for await (const [name, handle] of dirHandle.entries()) {
+            if (name.endsWith(".aoe2record") && handle.kind === "file") {
+              const file = await handle.getFile();
+              if (file.lastModified > latestModified) {
+                latestModified = file.lastModified;
+                latestFile = file;
+              }
             }
           }
-        }
 
-        if (!latestFile) {
-          setStatus("No .aoe2record files found.");
-          return;
-        }
+          if (!latestFile) return;
 
-        await uploadReplayFile(latestFile);
+          const buffer = await latestFile.arrayBuffer();
+          const hashBuffer = await crypto.subtle.digest("SHA-1", buffer);
+          const hash = Array.from(new Uint8Array(hashBuffer))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+
+          if (hash === lastHash) {
+            stableCount++;
+          } else {
+            lastHash = hash;
+            stableCount = 0;
+          }
+
+          if (stableCount >= MAX_STABLE && latestFile.size >= MIN_SIZE) {
+            setFileName(latestFile.name);
+            setStatus(`✅ File ready: ${latestFile.name}. Uploading...`);
+            await uploadReplayFile(latestFile);
+            lastHash = ""; // prevent reupload
+            stableCount = 0;
+          }
+        }, POLL_INTERVAL);
       } else {
         fileInputRef.current?.click();
       }
@@ -77,10 +104,10 @@ export default function ReplayParserPage() {
 
   return (
     <div className="p-6 space-y-4 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold">Manual Replay Parser</h1>
+      <h1 className="text-2xl font-bold">Replay Parser</h1>
       <p>
-        Select your SaveGame folder (Chrome/Edge) or upload a <code>.aoe2record</code> file
-        manually (Safari/Firefox).
+        Select your SaveGame folder (Chrome/Edge) or upload a <code>.aoe2record</code> file manually
+        (Safari/Firefox). If using a folder, the most recent replay will auto-upload after each match.
       </p>
 
       <button
