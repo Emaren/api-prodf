@@ -7,6 +7,9 @@ import platform
 import hashlib
 from datetime import datetime
 import requests
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 
 import mgz_hd
 from mgz_hd import header, summary

@@ -2,6 +2,6 @@ Flask
 Flask-Cors
 Flask-SQLAlchemy
 psycopg2-binary
-mgz
+-e ./mgz_hd
 watchdog
 python-dotenv
