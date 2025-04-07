@@ -8,21 +8,21 @@ from watchdog.observers.polling import PollingObserver
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from config import load_config
-
-# Override API endpoint for production
-os.environ["API_ENDPOINT"] = "https://aoe2hd-parser-api.onrender.com/api/parse_replay"
-
-
-# ✅ Import full parsing logic and API submission
 from parse_replay import parse_replay as full_parse_replay, send_to_api
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
+# Load config
 config = load_config()
 REPLAY_DIRS = config.get("replay_directories") or []
 USE_POLLING = config.get("use_polling", True)
 POLL_INTERVAL = config.get("polling_interval", 1)
 PARSE_INTERVAL = config.get("parse_interval", 10)
+LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", config.get("logging_level", "DEBUG")).upper()
+
+# ✅ Logging setup
+logging.basicConfig(
+    level=getattr(logging, LOGGING_LEVEL, logging.DEBUG),
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 ACTIVE_REPLAYS = {}
 LOCK = threading.Lock()
@@ -32,15 +32,20 @@ def sha1_of_file(path):
     try:
         with open(path, 'rb') as f:
             return hashlib.sha1(f.read()).hexdigest()
-    except Exception:
+    except Exception as e:
+        logging.error(f"❌ Failed to compute SHA1 of file: {path} | Error: {e}")
         return None
 
 
 def parse_replay(file_path, iteration, is_final=False):
+    logging.debug(f"🧪 Parsing replay (iteration={iteration}, final={is_final}): {file_path}")
     try:
         parsed_data = full_parse_replay(file_path, parse_iteration=iteration, is_final=is_final)
         if parsed_data:
+            logging.debug(f"📦 Parsed data keys: {list(parsed_data.keys())}")
             send_to_api(parsed_data)
+        else:
+            logging.warning(f"⚠️ Empty parse result for: {file_path}")
     except Exception as e:
         logging.error(f"❌ Parse failed: {e}")
 
@@ -48,7 +53,7 @@ def parse_replay(file_path, iteration, is_final=False):
 def wait_for_stability(file_path, stable_delay=5, poll_interval=2):
     last_size = -1
     stable_time = 0
-
+    logging.debug(f"🔍 Waiting for file to stabilize: {file_path}")
     while True:
         try:
             size = os.path.getsize(file_path)
@@ -58,9 +63,11 @@ def wait_for_stability(file_path, stable_delay=5, poll_interval=2):
 
         if size == last_size:
             stable_time += poll_interval
+            logging.debug(f"⏱️ Stable for {stable_time}/{stable_delay} seconds")
         else:
             stable_time = 0
             last_size = size
+            logging.debug(f"📏 File size changed: {size}")
 
         if stable_time >= stable_delay:
             logging.info(f"🔒 File stable: {file_path}")
@@ -70,27 +77,36 @@ def wait_for_stability(file_path, stable_delay=5, poll_interval=2):
 
 
 def watch_live_replay(file_path):
+    logging.info(f"🎬 Starting live watch: {file_path}")
     if not wait_for_stability(file_path):
+        logging.warning(f"⚠️ File never stabilized: {file_path}")
         return
 
     last_hash = None
+    last_parse_time = 0
     iteration = 0
     stable_iterations = 0
     max_stable_iterations = 3
+    min_seconds_between_parses = 15  # 🧘 Adjust to taste
 
     while True:
         if not os.path.exists(file_path):
-            logging.info(f"🛑 File removed: {file_path}")
+            logging.info(f"🛑 File removed during watch: {file_path}")
             return
 
         h = sha1_of_file(file_path)
-        if h and h != last_hash:
+        now = time.time()
+
+        if h and h != last_hash and (now - last_parse_time > min_seconds_between_parses):
+            logging.debug(f"🌀 New file hash detected: {h}")
             last_hash = h
+            last_parse_time = now
             iteration += 1
             stable_iterations = 0
             parse_replay(file_path, iteration, is_final=False)
         else:
             stable_iterations += 1
+            logging.debug(f"⏸ No new hash or cooldown not met. Stable iterations: {stable_iterations}/{max_stable_iterations}")
 
         if stable_iterations >= max_stable_iterations:
             logging.info(f"✅ Final parse triggered for: {file_path}")
@@ -103,21 +119,26 @@ def watch_live_replay(file_path):
 class ReplayEventHandler(FileSystemEventHandler):
     def handle_event(self, path):
         if not path.endswith((".aoe2record", ".aoe2mpgame", ".mgz")) or "Out of Sync" in path:
+            logging.debug(f"🚫 Ignored file: {path}")
             return
 
         with LOCK:
             if path not in ACTIVE_REPLAYS:
-                logging.info(f"🆕 Detected replay: {path}")
+                logging.info(f"🆕 Detected new replay file: {path}")
                 t = threading.Thread(target=watch_live_replay, args=(path,), daemon=True)
                 ACTIVE_REPLAYS[path] = t
                 t.start()
+            else:
+                logging.debug(f"🔁 Already watching: {path}")
 
     def on_created(self, event):
         if not event.is_directory:
+            logging.debug(f"📁 Created event: {event.src_path}")
             self.handle_event(event.src_path)
 
     def on_modified(self, event):
         if not event.is_directory:
+            logging.debug(f"✏️ Modified event: {event.src_path}")
             self.handle_event(event.src_path)
 
 

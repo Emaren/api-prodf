@@ -1,7 +1,3 @@
-###############################################################################
-# parse_replay.py (Final Version - HD & DE support, hash dedupe, ready for watcher)
-###############################################################################
-
 import os
 import io
 import json
@@ -19,7 +15,12 @@ from mgz_hd.fast.actions import parse_action_71094
 from config import load_config, get_flask_api_url
 
 print("Using mgz_hd from:", mgz_hd.__file__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+# Load config
+config = load_config()
+LOG_LEVEL = os.environ.get("LOGGING_LEVEL", config.get("logging_level", "DEBUG")).upper()
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.DEBUG),
+                    format="%(asctime)s [%(levelname)s] %(message)s")
 
 FLASK_API_URL = get_flask_api_url()
 
@@ -41,6 +42,7 @@ def extract_datetime_from_filename(filename: str):
 
 def infer_resign_winner(file_bytes, players):
     if len(players) != 2:
+        logging.debug(f"🧠 Running resign inference — Players: {[p['name'] for p in players]}")
         logging.warning("⚠️ Skipped resign logic: not a 2-player match.")
         return None
 
@@ -58,6 +60,8 @@ def infer_resign_winner(file_bytes, players):
                 break
 
     if len(resigns) == 1:
+        logging.info(f"🏁 Resign winner inferred: {players[1 - loser_index]['name']}")
+        logging.info(f"🧠 Only one resign action detected. Assuming player_id={loser_pid} resigned.")
         loser_pid = resigns[0].player_id
         loser_index = loser_pid - 1
         if loser_index in [0, 1]:
@@ -71,10 +75,12 @@ def hash_replay_file(path):
 
 
 def parse_de_replay(file_bytes):
+    logging.debug("📥 Starting parse_de_replay()")
     stats = {}
     with io.BytesIO(file_bytes) as buf:
         h = header.parse_stream(buf)
         stats["game_version"] = str(h.version)
+        logging.debug(f"🧩 Header version: {stats['game_version']}")
 
     with io.BytesIO(file_bytes) as buf:
         s = summary.Summary(buf)
@@ -90,6 +96,8 @@ def parse_de_replay(file_bytes):
             "game_type": str(s.get_version()),
         })
 
+        logging.debug(f"🗺️ Map: {stats['map_name']} | Size: {stats['map_size']} | Duration: {stats['game_duration']}")
+
         raw_players = s.get_players()
         players, winner = [], None
         for p in raw_players:
@@ -100,10 +108,13 @@ def parse_de_replay(file_bytes):
                 "score": p.get("score", 0),
             }
             players.append(player)
+            logging.debug(f"👤 Player: {player['name']} | Civ: {player['civilization']} | Winner: {player['winner']}")
+
             if player["winner"]:
                 winner = player["name"]
 
         if not winner and len(players) == 2:
+            logging.debug("🤔 No explicit winner found. Attempting resign inference.")
             resign_winner = infer_resign_winner(file_bytes, players)
             if resign_winner is not None:
                 players[resign_winner]["winner"] = True
@@ -112,10 +123,13 @@ def parse_de_replay(file_bytes):
 
         stats["players"] = players
         stats["winner"] = winner or "Unknown"
+        logging.debug(f"🏆 Final winner: {stats['winner']}")
+
     return stats
 
 
 def parse_replay(replay_path: str, parse_iteration=0, is_final=False) -> dict:
+    logging.debug(f"🛠 Starting parse (iteration={parse_iteration}, final={is_final}) for: {replay_path}")
     if not os.path.exists(replay_path):
         logging.error(f"❌ Replay not found: {replay_path}")
         return {}
@@ -143,9 +157,13 @@ def parse_replay(replay_path: str, parse_iteration=0, is_final=False) -> dict:
     stats["is_final"] = is_final
     stats["replay_hash"] = hash_replay_file(replay_path)
 
+    logging.debug(f"🧾 Parsed stats keys: {list(stats.keys())}")
+    logging.debug(f"🕒 Played on: {stats['played_on']} | Replay hash: {stats['replay_hash']}")
+
     try:
         with open(replay_path + ".json", "w") as f:
             json.dump(stats, f, indent=4)
+        logging.debug(f"💾 Debug JSON written: {replay_path}.json")
     except Exception as e:
         logging.warning(f"❌ Debug JSON write failed: {e}")
 
@@ -153,8 +171,7 @@ def parse_replay(replay_path: str, parse_iteration=0, is_final=False) -> dict:
 
 
 def send_to_api(parsed_data: dict):
-    targets = load_config().get("api_targets", ["local"])
-
+    targets = config.get("api_targets", ["local"])
     endpoints = {
         "local": "http://localhost:8002/api/parse_replay",
         "render": "https://aoe2hd-parser-api.onrender.com/api/parse_replay"
@@ -175,45 +192,30 @@ def send_to_api(parsed_data: dict):
                 logging.error(f"❌ [{target}] Error: {resp.status_code} - {resp.text}")
         except Exception as exc:
             logging.error(f"❌ [{target}] API failed: {exc}")
-
-
-def get_default_replay_dirs():
-    system = platform.system()
-    home = os.path.expanduser("~")
-    dirs = ["/replays"]
-
-    if system == "Darwin":
-        dirs += [
-            "/Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame",
-        ]
-    elif system == "Windows":
-        userprofile = os.environ.get("USERPROFILE", "")
-        dirs += [
-            os.path.join(userprofile, "Documents", "My Games", "Age of Empires 2 HD", "SaveGame"),
-        ]
-    else:
-        dirs += [
-            os.path.join(home, "Documents", "My Games", "Age of Empires 2 HD", "SaveGame"),
-        ]
-
-    return [d for d in dirs if os.path.isdir(d)]
+            logging.debug(f"📦 Payload: {json.dumps(parsed_data, indent=2)}")
 
 
 if __name__ == "__main__":
-    SAVEGAME_DIRS = get_default_replay_dirs()
-    SAVEGAME_DIR = SAVEGAME_DIRS[0] if SAVEGAME_DIRS else "/replays"
-    logging.info(f"📁 Using replay dir: {SAVEGAME_DIR}")
+    SAVEGAME_DIRS = config.get("replay_directories") or []
+    if not SAVEGAME_DIRS:
+        SAVEGAME_DIRS = get_default_replay_dirs()
 
-    replays = [f for f in os.listdir(SAVEGAME_DIR) if f.endswith(".aoe2record") or f.endswith(".mgz")]
+    for path in SAVEGAME_DIRS:
+        logging.info(f"📁 Scanning replay dir: {path}")
+        if not os.path.exists(path):
+            logging.warning(f"⚠️ Missing: {path}")
+            continue
 
-    def dt_key(fname):
-        dt = extract_datetime_from_filename(fname)
-        return dt or datetime.min
+        replays = [f for f in os.listdir(path) if f.endswith(".aoe2record") or f.endswith(".mgz")]
 
-    replays.sort(key=dt_key, reverse=True)
+        def dt_key(fname):
+            dt = extract_datetime_from_filename(fname)
+            return dt or datetime.min
 
-    for fname in replays:
-        replay_path = os.path.join(SAVEGAME_DIR, fname)
-        parsed_result = parse_replay(replay_path, parse_iteration=1, is_final=True)
-        if parsed_result:
-            send_to_api(parsed_result)
+        replays.sort(key=dt_key, reverse=True)
+
+        for fname in replays:
+            replay_path = os.path.join(path, fname)
+            parsed_result = parse_replay(replay_path, parse_iteration=1, is_final=True)
+            if parsed_result:
+                send_to_api(parsed_result)

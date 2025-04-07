@@ -4,7 +4,7 @@ import requests
 from parse_replay import parse_replay
 
 # Configure logging (reuse similar settings as in parse_replay.py)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # In client.py
 from config import load_config

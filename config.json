@@ -7,5 +7,5 @@
   "api_targets": ["local", "render"],
   "polling_interval": 1,
   "use_polling": true,
-  "logging_level": "INFO"
+  "logging_level": "DEBUG"
 }

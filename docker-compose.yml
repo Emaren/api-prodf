@@ -41,11 +41,11 @@ services:
       - .:/app
       - "/Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame:/replays"
     environment:
-      - FLASK_ENV=development
-      - FLASK_API_URL=http://aoe2-backend:8002/api/parse_replay
-      - DATABASE_URL=postgresql://aoe2user:secretpassword@aoe2-postgres:5432/aoe2db
-      - ADMIN_TOKEN=your-secret-token
-      - ENABLE_DEV_ENDPOINTS=true
+      FLASK_ENV: development
+      FLASK_API_URL: http://aoe2-backend:8002/api/parse_replay
+      DATABASE_URL: postgresql://aoe2user:secretpassword@aoe2-postgres:5432/aoe2db
+      ADMIN_TOKEN: secretadmin
+      ENABLE_DEV_ENDPOINTS: "true"
     command: ["python", "app.py"]
     depends_on:
       db:
@@ -53,25 +53,16 @@ services:
 
   frontend:
     build:
-      context: ./aoe2-betting
+      context: ../aoe2hd-frontend
       dockerfile: Dockerfile
+    container_name: aoe2hd-parsing-frontend-1
     ports:
       - "3000:3000"
-    depends_on:
-      - backend
-    env_file:
-      - ./aoe2-betting/.env
-
-  frontend-dev:
-    build:
-      context: ./aoe2-betting
-      dockerfile: Dockerfile
-    ports:
-      - "3001:3000"
     volumes:
-      - ./aoe2-betting:/app
+      - ../aoe2hd-frontend:/app
     environment:
-      - NODE_ENV=development
+      NODE_ENV: development
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8002
     command: npm run dev
     depends_on:
       - backend

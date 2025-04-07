@@ -4,7 +4,7 @@ import logging
 import json
 from datetime import timedelta
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
 
 def parse_hd_replay(filepath):
     logging.info("🎮 Parsing AoE2 HD replay: %s", filepath)
