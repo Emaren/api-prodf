@@ -3,7 +3,9 @@ import io
 import json
 import logging
 import hashlib
-from mgz_hd import header, summary
+from mgz_hd import header
+from mgz import summary  
+
 from utils.extract_datetime import extract_datetime_from_filename
 
 def parse_replay_full(replay_path):
