@@ -2,6 +2,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
+ENV PYTHONPATH="${PYTHONPATH}:/app"
 COPY . /app
 RUN ls /app/mgz_hd
 
