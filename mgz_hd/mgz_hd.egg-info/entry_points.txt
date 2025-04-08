@@ -1,0 +1,2 @@
+[console_scripts]
+mgz_hd = mgz_hd.cli:main
