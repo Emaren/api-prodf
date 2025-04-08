@@ -30,23 +30,32 @@ services:
     depends_on:
       - db
 
-  backend:
+  # Renamed from "backend" to "aoe2-backend"
+  aoe2-backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: aoe2-backend
+    container_name: aoe2-backend  # optional but consistent
     ports:
       - "8002:8002"
     volumes:
       - .:/app
+      # If you still need the local path to your replays, keep it below:
       - "/Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame:/replays"
     environment:
       FLASK_ENV: development
+      # The Postgres service name is "db", so we connect to "db:5432"
+      DATABASE_URL: postgresql://aoe2user:secretpassword@db:5432/aoe2db
+
+      # If you have a /api/parse_replay route, you can keep FLASK_API_URL, or remove if not used
       FLASK_API_URL: http://aoe2-backend:8002/api/parse_replay
-      DATABASE_URL: postgresql://aoe2user:secretpassword@aoe2-postgres:5432/aoe2db
+
       ADMIN_TOKEN: secretadmin
       ENABLE_DEV_ENDPOINTS: "true"
+
+    # This runs your Flask app
     command: ["python", "app.py"]
+
     depends_on:
       db:
         condition: service_healthy
@@ -60,12 +69,16 @@ services:
       - "3000:3000"
     volumes:
       - ../aoe2hd-frontend:/app
+    env_file:
+      - ../aoe2hd-frontend/.env
     environment:
       NODE_ENV: development
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8002
+      DOCKER: "true"  # ✅ lets next.config.js know we're in Docker
     command: npm run dev
+
+    # The front end depends on the new "aoe2-backend" service
     depends_on:
-      - backend
+      - aoe2-backend
 
 volumes:
   aoe2db_data:

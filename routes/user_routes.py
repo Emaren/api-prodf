@@ -1,12 +1,13 @@
 import os
-from flask import Blueprint, request, jsonify, abort
+from flask import Blueprint, request, jsonify
 from db import db
 from models import User, GameStats
+from sqlalchemy import cast, Text
 
-user_bp = Blueprint("user", __name__, url_prefix="/api")
+# All user endpoints => /api/user/...
+user_bp = Blueprint("user", __name__, url_prefix="/api/user")
 
-
-@user_bp.route("/register_user", methods=["POST"])
+@user_bp.route("/register", methods=["POST"])
 def register_user():
     data = request.get_json()
     uid = data.get("uid")
@@ -20,7 +21,12 @@ def register_user():
     if existing:
         return jsonify({"message": "User already exists"}), 200
 
-    new_user = User(uid=uid, email=email, in_game_name=in_game_name, verified=False)
+    new_user = User(
+        uid=uid,
+        email=email,
+        in_game_name=in_game_name,
+        verified=False
+    )
     db.session.add(new_user)
     db.session.commit()
     db.session.refresh(new_user)
@@ -36,8 +42,19 @@ def register_user():
     })
 
 
-@user_bp.route("/user/me", methods=["POST"])
+@user_bp.route("/me", methods=["POST", "GET"])
 def get_user_by_uid():
+    if request.method == "GET":
+        # Just a test GET path?
+        return jsonify({
+            "uid": "dev",
+            "email": "dev@local",
+            "in_game_name": "dev_player",
+            "verified": True,
+            "wallet_address": "DEVWALLET123",
+            "lock_name": None
+        })
+
     data = request.get_json()
     uid = data.get("uid")
     if not uid:
@@ -57,26 +74,28 @@ def get_user_by_uid():
     })
 
 
-@user_bp.route("/user/update_name", methods=["POST"])
+@user_bp.route("/update_name", methods=["POST"])
 def update_player_name():
     data = request.get_json()
     uid = data.get("uid")
     new_name = data.get("in_game_name")
 
     if not uid or not new_name:
-        return jsonify({"error": "Missing uid or name"}), 400
+        return jsonify({"error": "Missing uid or in_game_name"}), 400
 
     user = db.session.query(User).filter_by(uid=uid).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
 
+    # If user has an existing name, check if we can change it
     if user.in_game_name:
         if user.lock_name:
             return jsonify({"error": "Name change is locked during a match."}), 403
 
+        # IMPORTANT FIX: cast the players JSON column to text for ILIKE to work
         active_match = db.session.query(GameStats).filter(
             GameStats.is_final == False,
-            GameStats.players.ilike(f"%{user.in_game_name}%")
+            cast(GameStats.players, Text).ilike(f"%{user.in_game_name}%")
         ).first()
 
         if active_match:
@@ -87,7 +106,7 @@ def update_player_name():
     return jsonify({"message": "Name updated", "verified": user.verified})
 
 
-@user_bp.route("/user/update_wallet", methods=["POST"])
+@user_bp.route("/update_wallet", methods=["POST"])
 def update_wallet():
     data = request.get_json()
     uid = data.get("uid")
@@ -105,7 +124,7 @@ def update_wallet():
     return jsonify({"message": "Wallet address updated"})
 
 
-@user_bp.route("/online_users", methods=["GET"])
+@user_bp.route("/online", methods=["GET"])
 def get_online_users():
     users = db.session.query(User).filter(User.in_game_name.isnot(None)).all()
     return jsonify([
@@ -113,26 +132,21 @@ def get_online_users():
             "uid": u.uid,
             "in_game_name": u.in_game_name,
             "verified": u.verified
-        } for u in users
+        }
+        for u in users
     ])
 
 
-@user_bp.route("/admin/users", methods=["GET"])
-def list_users():
-    token = request.headers.get("Authorization")
-    if token != f"Bearer {os.getenv('ADMIN_TOKEN', 'secretadmin')}":
-        abort(401, description="Unauthorized")
-
-    users = User.query.all()
-    print("TOKEN ENV:", os.getenv("ADMIN_TOKEN"))
-    print("TOKEN HEADER:", request.headers.get("Authorization"))
-    return jsonify([
-    {
-        "uid": u.uid,
-        "email": u.email,
-        "in_game_name": u.in_game_name,
-        "verified": u.verified,
-        "created_at": u.created_at.isoformat() if u.created_at else None
-    } for u in users
-])
-
+@user_bp.route("/verify_token", methods=["POST"])
+def get_current_user():
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    user = User.query.filter_by(token=token).first()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify({
+        'id': user.id,
+        'uid': user.uid,
+        'email': user.email,
+        'in_game_name': user.in_game_name,
+        'verified': user.verified
+    })

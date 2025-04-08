@@ -2,6 +2,9 @@ Flask
 Flask-Cors
 Flask-SQLAlchemy
 psycopg2-binary
--e ./mgz_hd
 watchdog
 python-dotenv
+construct==2.8.16
+mgz==1.8.27
+-e ./mgz_hd
+flask-migrate

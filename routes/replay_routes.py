@@ -8,13 +8,12 @@ from models import GameStats, User
 from db import db
 from utils.replay_parser import parse_replay_full, hash_replay_file
 
+# This blueprint doesn't have a prefix, so routes are absolute
 replay_bp = Blueprint("replay", __name__)
-
 
 @replay_bp.route("/")
 def index():
     return "API is live"
-
 
 @replay_bp.route("/api/parse_replay", methods=["POST"])
 def parse_new_replay():
@@ -75,7 +74,6 @@ def parse_new_replay():
 
     return jsonify({"message": f"Replay stored (iteration {parse_iteration})"})
 
-
 @replay_bp.route("/api/game_stats", methods=["GET"])
 def game_stats():
     mode = request.args.get("mode", "final")
@@ -117,7 +115,6 @@ def game_stats():
     response = make_response(jsonify(results))
     response.headers["Cache-Control"] = "no-store"
     return response
-
 
 @replay_bp.route("/api/upload_replay", methods=["POST"])
 def upload_replay():
