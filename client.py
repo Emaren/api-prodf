@@ -32,6 +32,7 @@ def process_replay(replay_path):
     Process a replay file: parse it and send its data to the backend.
     """
     logging.info(f"Processing replay: {replay_path}")
+    print(f"📂 About to parse: {replay_path}")
     stats = parse_replay(replay_path)
     if stats is None:
         logging.error("Parsing failed, skipping backend submission.")

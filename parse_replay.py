@@ -13,9 +13,12 @@ import tempfile
 # Add current directory to sys.path so that imports work correctly.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-import mgz_hd
-from mgz_hd import header, summary
+import mgz_hd.parser_hd
+from mgz import header, summary
+from mgz_hd.parser_hd import parse_hd_replay as hd_parse_replay
 from mgz_hd.fast.actions import parse_action_71094
+print("MGZ Path:", mgz_hd.__file__)
+print("Working dir:", os.getcwd())
 
 # Import HD replay parser from the flattened mgz_hd package.
 # In your flattened structure, the HD parser is defined in mgz_hd/parser_hd.py.
@@ -232,26 +235,36 @@ def send_to_api(parsed_data: dict):
 
 
 if __name__ == "__main__":
-    SAVEGAME_DIRS = config.get("replay_directories") or []
-    if not SAVEGAME_DIRS:
-        SAVEGAME_DIRS = []
+    if len(sys.argv) > 1:
+        # Parse a single file passed as CLI argument
+        single_path = sys.argv[1]
+        if os.path.exists(single_path):
+            logging.info(f"📄 Parsing single replay: {single_path}")
+            result = parse_replay(single_path, parse_iteration=1, is_final=True)
+            if result:
+                send_to_api(result)
+        else:
+            logging.error(f"❌ File not found: {single_path}")
+    else:
+        # Fall back to parsing all replays in configured directories
+        SAVEGAME_DIRS = config.get("replay_directories") or []
+        for path in SAVEGAME_DIRS:
+            logging.info(f"📁 Scanning replay dir: {path}")
+            if not os.path.exists(path):
+                logging.warning(f"⚠️ Missing: {path}")
+                continue
 
-    for path in SAVEGAME_DIRS:
-        logging.info(f"📁 Scanning replay dir: {path}")
-        if not os.path.exists(path):
-            logging.warning(f"⚠️ Missing: {path}")
-            continue
+            replays = [f for f in os.listdir(path) if f.endswith(".aoe2record") or f.endswith(".mgz")]
 
-        replays = [f for f in os.listdir(path) if f.endswith(".aoe2record") or f.endswith(".mgz")]
+            def dt_key(fname):
+                dt = extract_datetime_from_filename(fname)
+                return dt or datetime.min
 
-        def dt_key(fname):
-            dt = extract_datetime_from_filename(fname)
-            return dt or datetime.min
+            replays.sort(key=dt_key, reverse=True)
 
-        replays.sort(key=dt_key, reverse=True)
+            for fname in replays:
+                replay_path = os.path.join(path, fname)
+                parsed_result = parse_replay(replay_path, parse_iteration=1, is_final=True)
+                if parsed_result:
+                    send_to_api(parsed_result)
 
-        for fname in replays:
-            replay_path = os.path.join(path, fname)
-            parsed_result = parse_replay(replay_path, parse_iteration=1, is_final=True)
-            if parsed_result:
-                send_to_api(parsed_result)
