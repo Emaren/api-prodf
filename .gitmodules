@@ -1,0 +1,3 @@
+[submodule "mgz_hd"]
+	path = mgz_hd
+	url = https://github.com/emaren/mgz_hd.git

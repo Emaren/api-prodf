@@ -1,6 +1,0 @@
-body
-common
-fast
-header
-model
-summary
