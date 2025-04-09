@@ -126,6 +126,7 @@ def update_wallet():
 
 @user_bp.route("/online", methods=["GET"])
 def get_online_users():
+    # Only users with non-null in_game_name
     users = db.session.query(User).filter(User.in_game_name.isnot(None)).all()
     return jsonify([
         {
