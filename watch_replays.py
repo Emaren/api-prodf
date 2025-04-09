@@ -15,7 +15,7 @@ config = load_config()
 REPLAY_DIRS = config.get("replay_directories") or []
 USE_POLLING = config.get("use_polling", True)
 POLL_INTERVAL = config.get("polling_interval", 1)
-PARSE_INTERVAL = config.get("parse_interval", 10)
+PARSE_INTERVAL = config.get("parse_interval", 15)  # 🔄 Increased from 10 to 15
 LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", config.get("logging_level", "DEBUG")).upper()
 
 # Logging
@@ -49,7 +49,7 @@ def parse_replay(file_path, iteration, is_final=False):
     except Exception as e:
         logging.error(f"❌ Parse failed: {e}", exc_info=True)
 
-def wait_for_stability(file_path, stable_delay=5, poll_interval=2):
+def wait_for_stability(file_path, stable_delay=15, poll_interval=3):  # ⏳ Increased delay and slower polling
     last_size = -1
     stable_time = 0
     logging.debug(f"🔍 Waiting for file to stabilize: {file_path}")
@@ -83,8 +83,8 @@ def watch_live_replay(file_path):
     last_hash = None
     iteration = 0
     stable_iterations = 0
-    max_stable_iterations = 3
-    min_seconds_between_parses = 60  # 🧘 1 parse per minute
+    max_stable_iterations = 6  # ⏲️ Increased from 3 to 6
+    min_seconds_between_parses = 120  # 🧘 Increased from 60s to 120s
 
     last_parse_time = 0
 
