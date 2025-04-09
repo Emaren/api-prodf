@@ -72,6 +72,23 @@ def create_app():
 
     return app
 
+    @app.after_request
+def add_cors_headers(response):
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "https://aoe2-betting.vercel.app",
+        "https://aoe2hd-frontend.onrender.com"
+    ]
+    origin = flask.request.headers.get("Origin")
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return response
+
 app = create_app()
 
 if __name__ == "__main__":
