@@ -10,14 +10,20 @@ migrate = Migrate()
 def create_app():
     app = Flask(__name__)
 
-    # CORS config (support credentials like cookies/auth headers)
-    CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": [
+    allowed_origins = [
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
         "https://aoe2-betting.vercel.app",
         "https://aoe2hd-frontend.onrender.com"
-    ]}})
+    ]
+
+    # ✅ Configure CORS with full support for preflight (OPTIONS)
+    CORS(app,
+         supports_credentials=True,
+         origins=allowed_origins,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "OPTIONS"])
 
     # Build DB connection string
     raw_db_url = os.getenv("DATABASE_URL")
@@ -65,16 +71,9 @@ def create_app():
         from routes.user_routes import get_user_by_uid
         return get_user_by_uid()
 
-    # Set CORS headers manually (e.g., for /me or other non-/api routes)
+    # 🔒 Add CORS headers manually for non-api routes if needed
     @app.after_request
     def add_cors_headers(response):
-        allowed_origins = [
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3002",
-            "https://aoe2-betting.vercel.app",
-            "https://aoe2hd-frontend.onrender.com"
-        ]
         origin = request.headers.get("Origin")
         if origin in allowed_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
