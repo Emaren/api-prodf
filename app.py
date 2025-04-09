@@ -10,14 +10,14 @@ migrate = Migrate()
 def create_app():
     app = Flask(__name__)
 
-    # ✅ CORS setup for local dev
-    CORS(app, origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "https://aoe2-betting.vercel.app",
-        "https://aoe2hd-frontend.onrender.com"
-    ], supports_credentials=True)
+    CORS(app, resources={r"/api/*": {"origins": [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "https://aoe2-betting.vercel.app",
+    "https://aoe2hd-frontend.onrender.com"
+]}})
+
 
     # Build DB connection string
     raw_db_url = os.getenv("DATABASE_URL")
