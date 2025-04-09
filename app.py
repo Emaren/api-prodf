@@ -10,6 +10,7 @@ migrate = Migrate()
 def create_app():
     app = Flask(__name__)
 
+    # CORS config (support credentials like cookies/auth headers)
     CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": [
         "http://localhost:3000",
         "http://localhost:3001",
@@ -23,27 +24,25 @@ def create_app():
     if not raw_db_url:
         user = os.getenv("PGUSER", "aoe2user")
         pw = os.getenv("PGPASSWORD", "secretpassword")
-        host = os.getenv("PGHOST", "db")  # Matches Compose service name
+        host = os.getenv("PGHOST", "db")
         port = os.getenv("PGPORT", "5432")
         dbname = os.getenv("PGDATABASE", "aoe2db")
         raw_db_url = f"postgresql://{user}:{pw}@{host}:{port}/{dbname}"
 
-    # Fix any old postgres:// URLs
     if raw_db_url.startswith("postgres://"):
         raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
     app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # Use SSL if on Render or external DB
     if "RENDER" in os.environ or "render.com" in raw_db_url:
-        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"sslmode": "require"}}
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "connect_args": {"sslmode": "require"}
+        }
 
-    # Init DB and migrations
     init_db(app)
     migrate.init_app(app, db)
 
-    # Auto-migrate on container startup
     with app.app_context():
         try:
             upgrade()
@@ -56,37 +55,37 @@ def create_app():
     from routes.debug_routes import debug_bp
     from routes.admin_routes import admin_bp
 
-    app.register_blueprint(replay_bp)  # /api/parse_replay, /api/game_stats
-    app.register_blueprint(user_bp)    # /api/user/*
-    app.register_blueprint(debug_bp)   # /debug/*
-    app.register_blueprint(admin_bp)   # /api/admin/*
+    app.register_blueprint(replay_bp)
+    app.register_blueprint(user_bp)
+    app.register_blueprint(debug_bp)
+    app.register_blueprint(admin_bp)
 
-    # Optional alias route
     @app.route("/me", methods=["GET", "POST"])
     def me_alias():
         from routes.user_routes import get_user_by_uid
         return get_user_by_uid()
 
+    # Set CORS headers manually (e.g., for /me or other non-/api routes)
+    @app.after_request
+    def add_cors_headers(response):
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:3002",
+            "https://aoe2-betting.vercel.app",
+            "https://aoe2hd-frontend.onrender.com"
+        ]
+        origin = request.headers.get("Origin")
+        if origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+        return response
+
     return app
 
 app = create_app()
-
-@app.after_request
-def add_cors_headers(response):
-    allowed_origins = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "https://aoe2-betting.vercel.app",
-        "https://aoe2hd-frontend.onrender.com"
-    ]
-    origin = request.headers.get("Origin")
-    if origin in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-    return response
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
