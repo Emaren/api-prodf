@@ -14,15 +14,11 @@ replay_bp = Blueprint("replay", __name__)
 def index():
     return "API is live"
 
-# A small helper function to handle any field that might already be
-# a Python list/dict OR a JSON string OR even None.
 def safe_json_load(data, default):
     if not data:
         return default
     if isinstance(data, str):
-        # If it's a string, assume it's valid JSON and parse it
         return json.loads(data)
-    # If it's already a list/dict (e.g., loaded by SQLAlchemy from a JSON column), just return it
     return data
 
 
@@ -38,16 +34,21 @@ def parse_new_replay():
     replay_hash = data.get("replay_hash")
     parse_iteration = int(data.get("parse_iteration", 0))
     is_final = bool(data.get("is_final", False))
+    force = request.args.get("force", "false").lower() == "true"
 
     if not replay_path or not replay_hash:
         return jsonify({"error": "Missing replay_file or replay_hash."}), 400
 
     if is_final:
-        existing_final = GameStats.query.filter_by(replay_hash=replay_hash, is_final=True).first()
-        if existing_final:
+        existing_finals = GameStats.query.filter_by(replay_hash=replay_hash, is_final=True).all()
+        if existing_finals and not force:
             return jsonify({"message": "Replay already parsed as final. Skipped."}), 200
+        elif existing_finals and force:
+            for record in existing_finals:
+                db.session.delete(record)
+            db.session.commit()
+            print(f"🧹 Deleted {len(existing_finals)} old final entries for hash: {replay_hash}")
 
-    # Store parsed data
     new_game = GameStats(
         replay_file=replay_path,
         replay_hash=replay_hash,
@@ -71,7 +72,6 @@ def parse_new_replay():
         db.session.add(new_game)
         db.session.commit()
 
-        # Verification logic: match users by normalized in-game names
         player_names = [p.get("name", "").strip().lower() for p in data.get("players", [])]
         matched_users = db.session.query(User).filter(
             db.func.lower(User.in_game_name).in_(player_names)
@@ -81,7 +81,6 @@ def parse_new_replay():
             if not user.verified:
                 user.verified = True
                 print(f"✅ Verified user: {user.uid} ({user.in_game_name})")
-            # Lock their name if replay is *not* final
             user.lock_name = not is_final
 
         db.session.commit()
@@ -98,7 +97,6 @@ def game_stats():
     mode = request.args.get("mode", "final")
 
     if mode == "latest":
-        # For each replay_hash, grab the row with the highest parse_iteration
         subquery = db.session.query(
             GameStats.replay_hash,
             db.func.max(GameStats.parse_iteration).label("max_iter")
@@ -109,9 +107,7 @@ def game_stats():
             (GameStats.replay_hash == subquery.c.replay_hash) &
             (GameStats.parse_iteration == subquery.c.max_iter)
         ).order_by(GameStats.played_on.desc().nullslast()).all()
-
     else:
-        # Default to showing only final records
         games = GameStats.query.filter_by(is_final=True).order_by(
             GameStats.played_on.desc().nullslast()
         ).all()
@@ -125,7 +121,6 @@ def game_stats():
             "parse_iteration": g.parse_iteration,
             "is_final": g.is_final,
             "game_version": g.game_version,
-            # Safely load JSON fields (map, players, event_types, key_events)
             "map": safe_json_load(g.map, {}),
             "game_type": g.game_type,
             "duration": g.duration,
