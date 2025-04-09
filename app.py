@@ -11,32 +11,31 @@ def create_app():
     app = Flask(__name__)
 
     CORS(app, resources={r"/api/*": {"origins": [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "https://aoe2-betting.vercel.app",
-    "https://aoe2hd-frontend.onrender.com"
-]}})
-
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "https://aoe2-betting.vercel.app",
+        "https://aoe2hd-frontend.onrender.com"
+    ]}})
 
     # Build DB connection string
     raw_db_url = os.getenv("DATABASE_URL")
     if not raw_db_url:
         user = os.getenv("PGUSER", "aoe2user")
         pw = os.getenv("PGPASSWORD", "secretpassword")
-        host = os.getenv("PGHOST", "db")  # <--- matches your Compose service name for Postgres
+        host = os.getenv("PGHOST", "db")  # Matches Compose service name
         port = os.getenv("PGPORT", "5432")
         dbname = os.getenv("PGDATABASE", "aoe2db")
         raw_db_url = f"postgresql://{user}:{pw}@{host}:{port}/{dbname}"
 
-    # Fix any old postgres:// URLs that need to be postgresql://
+    # Fix any old postgres:// URLs
     if raw_db_url.startswith("postgres://"):
         raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
     app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # If running on Render or a DB that needs SSL
+    # Use SSL if on Render or external DB
     if "RENDER" in os.environ or "render.com" in raw_db_url:
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"sslmode": "require"}}
 
@@ -44,12 +43,10 @@ def create_app():
     init_db(app)
     migrate.init_app(app, db)
 
-    # ───────────────────────────────────────────────────────────────────
-    # AUTOMATIC MIGRATIONS on container startup
-    # ───────────────────────────────────────────────────────────────────
+    # Auto-migrate on container startup
     with app.app_context():
         try:
-            upgrade()  # Alembic "flask db upgrade"
+            upgrade()
         except Exception as e:
             logging.warning(f"Auto-migrate failed: {e}")
 
@@ -64,46 +61,13 @@ def create_app():
     app.register_blueprint(debug_bp)   # /debug/*
     app.register_blueprint(admin_bp)   # /api/admin/*
 
-    # Optional alias route => /me is the same as /api/user/me
+    # Optional alias route
     @app.route("/me", methods=["GET", "POST"])
     def me_alias():
         from routes.user_routes import get_user_by_uid
         return get_user_by_uid()
 
     return app
-
-    @app.after_request
-    def add_cors_headers(response):
-        allowed_origins = [
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3002",
-            "https://aoe2-betting.vercel.app",
-            "https://aoe2hd-frontend.onrender.com"
-        ]
-        origin = flask.request.headers.get("Origin")
-        if origin in allowed_origins:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-        return response
-    @app.after_request
-    def add_cors_headers(response):
-        allowed_origins = [
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3002",
-            "https://aoe2-betting.vercel.app",
-            "https://aoe2hd-frontend.onrender.com"
-        ]
-        origin = flask.request.headers.get("Origin")
-        if origin in allowed_origins:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
-            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-        return response
 
 app = create_app()
 
