@@ -14,7 +14,9 @@ def create_app():
     CORS(app, origins=[
         "http://localhost:3000",
         "http://localhost:3001",
-        "http://localhost:3002"
+        "http://localhost:3002",
+        "https://aoe2-betting.vercel.app",
+        "https://aoe2hd-frontend.onrender.com"
     ], supports_credentials=True)
 
     # Build DB connection string
