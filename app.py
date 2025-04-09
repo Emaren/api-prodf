@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from flask_migrate import Migrate, upgrade
 from db import db, init_db
