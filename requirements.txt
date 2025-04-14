@@ -1,9 +1,9 @@
-Flask
-Flask-Cors
-Flask-SQLAlchemy
-psycopg2-binary
+fastapi
+uvicorn[standard]
 watchdog
 python-dotenv
 construct==2.8.16
 mgz==1.8.27
-flask-migrate
+asyncpg
+SQLAlchemy[asyncio]
+aiofiles

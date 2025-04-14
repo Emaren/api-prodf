@@ -1,186 +1,182 @@
 import os
-import platform
 import time
 import logging
 import threading
+import platform
 import hashlib
-from watchdog.observers.polling import PollingObserver
+import asyncio
 from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 from config import load_config
-from parse_replay import parse_replay as full_parse_replay, send_to_api
+from parse_replay import parse_and_send
+from utils.replay_parser import parse_replay_full  # ⬅️ Inline parse summary
+from utils.extract_datetime import extract_datetime_from_filename
 
-# Load config
 config = load_config()
 REPLAY_DIRS = config.get("replay_directories") or []
 USE_POLLING = config.get("use_polling", True)
 POLL_INTERVAL = config.get("polling_interval", 1)
-PARSE_INTERVAL = config.get("parse_interval", 15)  # 🔄 Increased from 10 to 15
-LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", config.get("logging_level", "DEBUG")).upper()
+PARSE_INTERVAL = config.get("parse_interval", 15)
+STABLE_TIME = config.get("stable_time_seconds", 60)
+MIN_SIZE = 1
 
-# Logging
 logging.basicConfig(
-    level=getattr(logging, LOGGING_LEVEL, logging.DEBUG),
+    level=os.getenv("LOGGING_LEVEL", config.get("logging_level", "DEBUG")).upper(),
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-ACTIVE_REPLAYS = {}
 LOCK = threading.Lock()
+ACTIVE = {}
 
 def sha1_of_file(path):
     try:
         with open(path, 'rb') as f:
-            sha1 = hashlib.sha1(f.read()).hexdigest()
-            logging.debug(f"🔐 SHA1 of {path}: {sha1}")
-            return sha1
+            return hashlib.sha1(f.read()).hexdigest()
     except Exception as e:
-        logging.error(f"❌ Failed to compute SHA1 of file: {path} | Error: {e}")
+        logging.error(f"❌ SHA1 failed for {path}: {e}")
         return None
 
-def parse_replay(file_path, iteration, is_final=False):
-    logging.debug(f"🧪 Parsing replay (iteration={iteration}, final={is_final}): {file_path}")
+def summarize_parse(path):
+    """Optional post-parse inline summary logging for traceability"""
     try:
-        parsed_data = full_parse_replay(file_path, parse_iteration=iteration, is_final=is_final)
-        if parsed_data:
-            logging.debug(f"📦 Parsed data keys: {list(parsed_data.keys())}")
-            send_to_api(parsed_data)
-        else:
-            logging.warning(f"⚠️ Empty parse result for: {file_path}")
+        parsed = asyncio.run(parse_replay_full(path))
+        if not parsed:
+            logging.warning(f"⚠️ Could not summarize parse (empty)")
+            return
+
+        map_name = parsed.get("map", {}).get("name", "Unknown")
+        winner = parsed.get("winner", "Unknown")
+        players = parsed.get("players", [])
+        player_names = ", ".join(p.get("name", "?") for p in players)
+
+        logging.debug(f"🧠 Parsed map: {map_name}")
+        logging.debug(f"🧠 Winner: {winner}")
+        logging.debug(f"🧠 Players: {player_names}")
+    except Exception as e:
+        logging.warning(f"❌ Failed to summarize parse: {e}")
+
+def parse(path, iteration, is_final=False):
+    try:
+        if os.path.getsize(path) < MIN_SIZE:
+            logging.debug(f"⏳ Skipping tiny file: {path}")
+            return
+        asyncio.run(parse_and_send(path, force=False, parse_iteration=iteration, is_final=is_final))
+        if is_final:
+            summarize_parse(path)
     except Exception as e:
         logging.error(f"❌ Parse failed: {e}", exc_info=True)
 
-def wait_for_stability(file_path, stable_delay=15, poll_interval=3):  # ⏳ Increased delay and slower polling
-    last_size = -1
-    stable_time = 0
-    logging.debug(f"🔍 Waiting for file to stabilize: {file_path}")
+def wait_for_stability(path, delay=STABLE_TIME, poll=3):
+    last_size, stable = -1, 0
     while True:
         try:
-            size = os.path.getsize(file_path)
+            size = os.path.getsize(path)
         except FileNotFoundError:
-            logging.warning(f"🛑 File disappeared: {file_path}")
+            logging.warning(f"🛑 File gone: {path}")
             return False
-
         if size == last_size:
-            stable_time += poll_interval
-            logging.debug(f"⏱️ Stable for {stable_time}/{stable_delay} seconds")
+            stable += poll
         else:
-            stable_time = 0
             last_size = size
-            logging.debug(f"📏 File size changed to: {size}")
-
-        if stable_time >= stable_delay:
-            logging.info(f"🔒 File considered stable: {file_path}")
+            stable = 0
+        if stable >= delay:
             return True
+        time.sleep(poll)
 
-        time.sleep(poll_interval)
-
-def watch_live_replay(file_path):
-    logging.info(f"🎬 Started live watch: {file_path}")
-    if not wait_for_stability(file_path):
-        logging.warning(f"⚠️ File never stabilized: {file_path}")
+def watch_replay(path):
+    logging.info(f"🎬 Watching: {path}")
+    if not wait_for_stability(path):
+        logging.warning(f"⚠️ Never stabilized: {path}")
         return
 
-    last_hash = None
-    iteration = 0
-    stable_iterations = 0
-    max_stable_iterations = 6  # ⏲️ Increased from 3 to 6
-    min_seconds_between_parses = 120  # 🧘 Increased from 60s to 120s
-
-    last_parse_time = 0
+    last_hash, last_time = None, 0
+    iteration, stable_count = 0, 0
+    max_stable = 4
+    cooldown = 120
 
     while True:
-        if not os.path.exists(file_path):
-            logging.info(f"🗑️ File removed during watch: {file_path}")
+        if not os.path.exists(path):
+            logging.info(f"🗑️ Replay removed: {path}")
             return
 
         now = time.time()
-        h = sha1_of_file(file_path)
+        h = sha1_of_file(path)
 
-        if h and h != last_hash and (now - last_parse_time >= min_seconds_between_parses):
-            logging.debug(f"🌀 New file hash detected: {h}")
-            last_hash = h
-            last_parse_time = now
+        if h and h != last_hash and (now - last_time >= cooldown):
+            last_hash, last_time = h, now
             iteration += 1
-            stable_iterations = 0
-            logging.debug(f"🚀 Triggering intermediate parse #{iteration} for {file_path}")
-            parse_replay(file_path, iteration, is_final=False)
+            stable_count = 0
+            logging.debug(f"🚀 Parsing iter {iteration}: {path}")
+            parse(path, iteration, is_final=False)
         else:
-            stable_iterations += 1
-            logging.debug(f"⏸ No new hash or throttle active. Stable iterations: {stable_iterations}/{max_stable_iterations}")
+            stable_count += 1
+            logging.debug(f"⏸ Waiting... {stable_count}/{max_stable}")
 
-        if stable_iterations >= max_stable_iterations:
-            logging.info(f"🏁 Final parse triggered for: {file_path}")
-            parse_replay(file_path, iteration + 1, is_final=True)
+        if stable_count >= max_stable:
+            logging.info(f"🏁 Final parse for: {path}")
+            parse(path, iteration + 1, is_final=True)
             break
 
         time.sleep(PARSE_INTERVAL)
 
-class ReplayEventHandler(FileSystemEventHandler):
-    def handle_event(self, path):
+class Handler(FileSystemEventHandler):
+    def handle(self, path):
         if not path.endswith((".aoe2record", ".aoe2mpgame", ".mgz")) or "Out of Sync" in path:
-            logging.debug(f"🚫 Ignored file: {path}")
             return
-
         with LOCK:
-            if path not in ACTIVE_REPLAYS:
-                logging.info(f"🆕 New replay detected: {path}")
-                t = threading.Thread(target=watch_live_replay, args=(path,), daemon=True)
-                ACTIVE_REPLAYS[path] = t
+            if path not in ACTIVE:
+                logging.info(f"🆕 Replay: {path}")
+                t = threading.Thread(target=watch_replay, args=(path,), daemon=True)
+                ACTIVE[path] = t
                 t.start()
-            else:
-                logging.debug(f"🔁 Already watching: {path}")
 
-    def on_created(self, event):
-        if not event.is_directory:
-            logging.debug(f"📁 File created: {event.src_path}")
-            self.handle_event(event.src_path)
+    def on_created(self, e):
+        if not e.is_directory:
+            self.handle(e.src_path)
 
-    def on_modified(self, event):
-        if not event.is_directory:
-            logging.debug(f"✏️ File modified: {event.src_path}")
-            self.handle_event(event.src_path)
+    def on_modified(self, e):
+        if not e.is_directory:
+            self.handle(e.src_path)
 
-def get_default_replay_dirs():
+def default_dirs():
     system = platform.system()
     home = os.path.expanduser("~")
-    dirs = ["/replays"]
-
+    paths = ["/replays"]
     if system == "Windows":
-        userprofile = os.environ.get("USERPROFILE", "")
-        dirs += [
-            os.path.join(userprofile, "Documents", "My Games", "Age of Empires 2 HD", "SaveGame"),
-            os.path.join(userprofile, "Documents", "My Games", "Age of Empires 2 DE", "SaveGame"),
-        ]
+        u = os.environ.get("USERPROFILE", "")
+        paths += [os.path.join(u, p) for p in [
+            "Documents/My Games/Age of Empires 2 HD/SaveGame",
+            "Documents/My Games/Age of Empires 2 DE/SaveGame"
+        ]]
     elif system == "Darwin":
-        dirs += [
+        paths += [
             "/Users/tonyblum/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Age2HD/SaveGame",
-            "/Users/tonyblum/Documents/My Games/Age of Empires 2 DE/SaveGame",
+            "/Users/tonyblum/Documents/My Games/Age of Empires 2 DE/SaveGame"
         ]
     else:
-        dirs += [
-            os.path.join(home, ".wine/drive_c/Program Files (x86)/Microsoft Games/Age of Empires II HD/SaveGame"),
-            os.path.join(home, "Documents/My Games/Age of Empires 2 HD/SaveGame"),
-        ]
+        paths += [os.path.join(home, p) for p in [
+            ".wine/drive_c/Program Files (x86)/Microsoft Games/Age of Empires II HD/SaveGame",
+            "Documents/My Games/Age of Empires 2 HD/SaveGame"
+        ]]
+    return [d for d in paths if os.path.isdir(d)]
 
-    return [d for d in dirs if os.path.isdir(d)]
-
-if __name__ == '__main__':
-    directories = REPLAY_DIRS or get_default_replay_dirs()
+if __name__ == "__main__":
+    dirs = REPLAY_DIRS or default_dirs()
     observer = PollingObserver() if USE_POLLING else Observer()
 
-    for directory in directories:
-        if os.path.exists(directory):
-            logging.info(f"👀 Watching directory: {directory}")
-            observer.schedule(ReplayEventHandler(), directory, recursive=False)
+    for d in dirs:
+        if os.path.exists(d):
+            logging.info(f"👀 Watching dir: {d}")
+            observer.schedule(Handler(), d, recursive=False)
         else:
-            logging.warning(f"⚠️ Replay directory missing: {directory}")
+            logging.warning(f"⚠️ Missing dir: {d}")
 
     observer.start()
     try:
         while True:
             time.sleep(POLL_INTERVAL)
     except KeyboardInterrupt:
-        logging.info("🛑 Watcher shutdown requested")
+        logging.info("🛑 Exiting...")
         observer.stop()
-
     observer.join()
