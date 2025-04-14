@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-ENV PYTHONPATH="/main"
+ENV PYTHONPATH="/app"
 
 COPY . /app
 
