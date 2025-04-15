@@ -19,4 +19,5 @@ ENV POSTGRES_PORT=5432
 ENV POSTGRES_USER=aoe2user
 ENV POSTGRES_DB=aoe2db
 
-CMD ["sh", "-c", "./wait-for-postgres.sh && python main.py"]
+# Just call wait-for-postgres.sh, which ends with "exec python app.py"
+CMD ["sh", "-c", "./wait-for-postgres.sh"]
