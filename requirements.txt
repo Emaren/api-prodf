@@ -7,3 +7,4 @@ mgz==1.8.27
 asyncpg
 SQLAlchemy[asyncio]
 aiofiles
+psycopg2-binary==2.9.6
