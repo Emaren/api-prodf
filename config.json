@@ -10,5 +10,5 @@
   "logging_level": "DEBUG",
   "stable_time_seconds": 60,
 
-  "DATABASE_URL": "postgresql+asyncpg://aoe2user:postgres@localhost:5432/aoe2db"
+  "DATABASE_URL": "postgresql+asyncpg://aoe2user:secretpassword@localhost:5432/aoe2db"
 }
