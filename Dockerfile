@@ -18,13 +18,6 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN chmod +x /app/wait-for-postgres.sh
-
-ENV POSTGRES_HOST=aoe2-postgres
-ENV POSTGRES_PORT=5432
-ENV POSTGRES_USER=aoe2user
-ENV POSTGRES_DB=aoe2db
-
+# Instead, just run your Python app (or Uvicorn)
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
-
 
