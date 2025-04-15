@@ -7,10 +7,16 @@ COPY . /app
 
 # Install dependencies
 RUN apt-get update && \
-    apt-get install -y postgresql-client && \
+    apt-get install -y \
+        postgresql-client \
+        libpq-dev \
+        gcc \
+        python3-dev \
+    && \
     pip install --upgrade pip && \
     pip install -r requirements.txt && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN chmod +x /app/wait-for-postgres.sh
 
