@@ -6,7 +6,7 @@ tmux kill-session -t $SESSION 2>/dev/null
 # ----------------------------
 # Step 1: Create the main window ("dev") with Backend and Frontend side by side.
 # ----------------------------
-tmux new-session -d -s $SESSION -n dev 'cd ~/projects/aoe2hd-parsing && uvicorn main:app --reload --port=8002'
+tmux new-session -d -s $SESSION -n dev 'cd ~/projects/aoe2hd-parsing && uvicorn app:app --reload --port=8002'
 tmux split-window -h -t $SESSION:dev 'cd ~/projects/aoe2hd-parsing && python watch_replays.py'
 tmux select-layout -t $SESSION:dev even-horizontal
 

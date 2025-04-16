@@ -10,14 +10,15 @@ import requests
 # Local imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.replay_parser import parse_replay_full, hash_replay_file
-from config import load_config
+from config import load_config, get_api_targets
 from utils.extract_datetime import extract_datetime_from_filename
 
 # ───────────────────────────────────────────────
 # 🔧 Setup
 # ───────────────────────────────────────────────
 config = load_config()
-FLASK_API_URL = config.get("api_targets", ["local"])
+api_targets = get_api_targets() or config.get("api_targets", ["local"])
+
 LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", config.get("logging_level", "DEBUG")).upper()
 logging.basicConfig(level=getattr(logging, LOGGING_LEVEL, logging.DEBUG))
 
@@ -40,29 +41,22 @@ async def parse_and_send(replay_path: str, force: bool = False, parse_iteration:
         logging.warning(f"⚠️ Failed to parse: {replay_path}")
         return
 
-    # Add metadata
     parsed["played_on"] = extract_datetime_from_filename(os.path.basename(replay_path)).isoformat() if extract_datetime_from_filename(os.path.basename(replay_path)) else None
     parsed["replay_file"] = replay_path
     parsed["parse_iteration"] = parse_iteration
     parsed["is_final"] = is_final
     parsed["replay_hash"] = await hash_replay_file(replay_path)
-
-    # 🆕 Ensure game_duration is included
     parsed["game_duration"] = parsed.get("duration") or parsed.get("header", {}).get("duration") or None
 
-    # Save locally for debugging
+    # Optional local dump
     try:
         with open(replay_path + ".json", "w") as f:
             json.dump(parsed, f, indent=2)
     except Exception as e:
         logging.warning(f"❌ Could not save .json: {e}")
 
-    # Send to all configured targets
-    for target in config.get("api_targets", ["local"]):
-        url = ENDPOINTS.get(target)
-        if not url:
-            logging.warning(f"⚠️ Unknown target: {target}")
-            continue
+    for target in api_targets:
+        url = ENDPOINTS.get(target) or target  # allow full custom URLs
         full_url = url + ("?force=true" if force else "")
         try:
             logging.info(f"📤 Sending to [{target}] → {parsed['replay_file']}")

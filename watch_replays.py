@@ -8,11 +8,15 @@ import asyncio
 from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
-from config import load_config
+
+from config import load_config, get_api_targets
 from parse_replay import parse_and_send
-from utils.replay_parser import parse_replay_full  # ⬅️ Inline parse summary
+from utils.replay_parser import parse_replay_full
 from utils.extract_datetime import extract_datetime_from_filename
 
+# ───────────────────────────────────────────────
+# 🔧 Config
+# ───────────────────────────────────────────────
 config = load_config()
 REPLAY_DIRS = config.get("replay_directories") or []
 USE_POLLING = config.get("use_polling", True)
@@ -29,6 +33,9 @@ logging.basicConfig(
 LOCK = threading.Lock()
 ACTIVE = {}
 
+# ───────────────────────────────────────────────
+# 🔁 Helpers
+# ───────────────────────────────────────────────
 def sha1_of_file(path):
     try:
         with open(path, 'rb') as f:
@@ -38,13 +45,11 @@ def sha1_of_file(path):
         return None
 
 def summarize_parse(path):
-    """Optional post-parse inline summary logging for traceability"""
     try:
         parsed = asyncio.run(parse_replay_full(path))
         if not parsed:
-            logging.warning(f"⚠️ Could not summarize parse (empty)")
+            logging.warning("⚠️ Could not summarize parse (empty)")
             return
-
         map_name = parsed.get("map", {}).get("name", "Unknown")
         winner = parsed.get("winner", "Unknown")
         players = parsed.get("players", [])
@@ -120,6 +125,9 @@ def watch_replay(path):
 
         time.sleep(PARSE_INTERVAL)
 
+# ───────────────────────────────────────────────
+# 👀 Watcher Handler
+# ───────────────────────────────────────────────
 class Handler(FileSystemEventHandler):
     def handle(self, path):
         if not path.endswith((".aoe2record", ".aoe2mpgame", ".mgz")) or "Out of Sync" in path:
@@ -139,6 +147,9 @@ class Handler(FileSystemEventHandler):
         if not e.is_directory:
             self.handle(e.src_path)
 
+# ───────────────────────────────────────────────
+# 📁 Default Search Paths
+# ───────────────────────────────────────────────
 def default_dirs():
     system = platform.system()
     home = os.path.expanduser("~")
@@ -161,6 +172,9 @@ def default_dirs():
         ]]
     return [d for d in paths if os.path.isdir(d)]
 
+# ───────────────────────────────────────────────
+# 🚀 Entrypoint
+# ───────────────────────────────────────────────
 if __name__ == "__main__":
     dirs = REPLAY_DIRS or default_dirs()
     observer = PollingObserver() if USE_POLLING else Observer()

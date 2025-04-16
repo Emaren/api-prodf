@@ -1,8 +1,8 @@
-"""Add game_duration column
+"""Fix: squashed game_duration + metadata
 
-Revision ID: 5cf017466c3a
-Revises: d6a2f378877b
-Create Date: 2025-04-09 23:00:20.182258
+Revision ID: 42c4a9299cea
+Revises: 35a7815a5b08
+Create Date: 2025-04-15 20:21:46.980597
 
 """
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '5cf017466c3a'
-down_revision = 'd6a2f378877b'
+revision = '42c4a9299cea'
+down_revision = '35a7815a5b08'
 branch_labels = None
 depends_on = None
 
