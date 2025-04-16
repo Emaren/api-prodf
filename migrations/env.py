@@ -5,23 +5,32 @@ import json
 import pathlib
 from logging.config import fileConfig
 
-# ✅ Fix module import path early
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from alembic import context
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from db.models import Base  # your declarative_base
+from dotenv import load_dotenv
 
 # ─────────────────────────────────────────────
-# 📦 Load config and DB URL
+# ✅ Load environment variables from .env
 # ─────────────────────────────────────────────
-CONFIG_PATH = pathlib.Path(__file__).parent.parent / "config.json"
-if CONFIG_PATH.exists():
-    with open(CONFIG_PATH) as f:
-        DB_URL = json.load(f).get("DATABASE_URL")
-else:
-    # Fallback: environment variable, then a local default
-    DB_URL = os.getenv("DATABASE_URL") or "postgresql+asyncpg://aoe2user:postgres@localhost:5432/aoe2db"
+dotenv_path = pathlib.Path(__file__).parent.parent / ".env"
+if dotenv_path.exists():
+    load_dotenv(dotenv_path)
+
+# ─────────────────────────────────────────────
+# 🔧 Resolve DB URL
+# Priority: CLI > .env > config.json > fallback
+# ─────────────────────────────────────────────
+cli_args = context.get_x_argument(as_dictionary=True)
+DB_URL = cli_args.get("db_url")
+
+if not DB_URL:
+    config_json_path = pathlib.Path(__file__).parent.parent / "config.json"
+    if config_json_path.exists():
+        with open(config_json_path) as f:
+            DB_URL = json.load(f).get("DATABASE_URL")
+
+DB_URL = DB_URL or os.getenv("DATABASE_URL") or "postgresql+asyncpg://aoe2user:postgres@localhost:5432/aoe2db"
 
 # ─────────────────────────────────────────────
 # 🔧 Alembic config

@@ -1,6 +1,14 @@
-# Makefile for AoE2HD Parsing App
+# Makefile for AoE2HD Parsing App 🧠
 
+# ─────────────────────────────
+# 🔧 ENVIRONMENT
+# ─────────────────────────────
+ENV_FILE ?= .env
+
+# ─────────────────────────────
 # 🛠️ DEV TASKS (Native)
+# ─────────────────────────────
+
 dev: pg-start run
 
 pg-start:
@@ -8,8 +16,8 @@ pg-start:
 	@brew services start postgresql@14 || true
 
 run:
-	@echo "🚀 Launching FastAPI locally with .env.dev ..."
-	@ENV_FILE=.env.dev ./run_local.sh
+	@echo "🚀 Launching FastAPI locally with $(ENV_FILE)..."
+	@ENV_FILE=$(ENV_FILE) ./run_local.sh
 
 pg-shell:
 	psql -U aoe2user -d aoe2db
@@ -23,7 +31,10 @@ pg-stop:
 	@echo "🛑 Stopping local PostgreSQL..."
 	@brew services stop postgresql@14
 
+# ─────────────────────────────
 # 🐳 DEV TASKS (Docker)
+# ─────────────────────────────
+
 dev-up:
 	@echo "🟢 Starting Docker DB/PGAdmin only..."
 	docker compose up db pgadmin -d
@@ -36,22 +47,43 @@ dev-reset:
 	@echo "♻️ Resetting Docker Dev DB..."
 	docker compose down -v && docker compose up db pgadmin -d
 
+# ─────────────────────────────
 # 🚀 PROD TASKS
+# ─────────────────────────────
+
 prod-up:
-	@echo "🚀 Starting Production Docker Environment..."
 	docker compose -f docker-compose.prod.yml up -d --build
 
 prod-down:
-	@echo "🛑 Stopping Production..."
 	docker compose -f docker-compose.prod.yml down -v
 
 prod-rebuild:
-	@echo "♻️ Rebuilding Production Environment..."
 	docker compose -f docker-compose.prod.yml down -v
 	docker system prune -af --volumes
 	docker compose -f docker-compose.prod.yml up -d --build
 
+# ─────────────────────────────
+# 🧬 MIGRATIONS
+# ─────────────────────────────
+
+migrate:
+	alembic revision --autogenerate -m "$(msg)"
+
+migrate-dev:
+	alembic upgrade head
+
+migrate-prod:
+	@echo "🚀 Deploying migrations to production..."
+	PGPASSWORD=$(PROD_DB_PASS) alembic -x db_url="$(PROD_DB_URL)" upgrade head
+	@echo "✅ Production schema updated successfully!"
+
+stamp:
+	alembic stamp head
+
+# ─────────────────────────────
 # 🔍 UTILITIES
+# ─────────────────────────────
+
 logs:
 	docker compose logs -f
 
@@ -61,17 +93,27 @@ ps:
 prune:
 	docker system prune -af --volumes
 
+# ─────────────────────────────
+# 🎯 FULL STACK LAUNCH
+# ─────────────────────────────
+
 frontend:
 	cd ../aoe2hd-frontend && npm run dev
 
 all:
-	@echo "🚀 Launching FastAPI and Frontend..."
-	(ENV_FILE=.env.dev ./run_local.sh &) && \
+	(ENV_FILE=$(ENV_FILE) ./run_local.sh &) && \
 	cd ../aoe2hd-frontend && npm run dev
 
 frontend-tab:
 	osascript -e 'tell app "Terminal" to do script "cd ~/projects/aoe2hd-frontend && npm run dev"'
 
 backend-tab:
-	osascript -e 'tell app "Terminal" to do script "cd ~/projects/aoe2hd-parsing && ENV_FILE=.env.dev ./run_local.sh"'
+	osascript -e 'tell app "Terminal" to do script "cd ~/projects/aoe2hd-parsing && ENV_FILE=$(ENV_FILE) ./run_local.sh"'
 
+# ─────────────────────────────
+# 🔖 GIT TAG HELPER
+# ─────────────────────────────
+
+tag:
+	git tag -a v$(tag) -m "$(msg)"
+	git push origin v$(tag)

@@ -1,8 +1,8 @@
-"""Fix: squashed game_duration + metadata
+"""Sync: full schema
 
-Revision ID: 42c4a9299cea
-Revises: 35a7815a5b08
-Create Date: 2025-04-15 20:21:46.980597
+Revision ID: ba36e6698316
+Revises: 
+Create Date: 2025-04-15 21:43:39.276975
 
 """
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '42c4a9299cea'
-down_revision = '35a7815a5b08'
+revision = 'ba36e6698316'
+down_revision = None
 branch_labels = None
 depends_on = None
 
