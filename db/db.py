@@ -8,11 +8,13 @@ from fastapi import Depends
 
 # ------------------------------------------------------------------------
 # Load DB URL from the environment, stripping extraneous whitespace/newlines.
-# If not set, use a fallback external Render URL.
+# If not set, use the fallback external Render URL with literal credentials.
+# Note: Do not include "?sslmode=require" in the URL because asyncpg does not accept it.
+# SSL will be provided via the ssl_context.
 # ------------------------------------------------------------------------
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://aoe2hd_db_user:GvoxmmKHfCMOKVKBkpx6c1mQrQZ5hHHN@dpg-cvo1fgeuk2gs73bgj3eg-a.oregon-postgres.render.com:5432/aoe2hd_db?sslmode=require"
+    "postgresql+asyncpg://aoe2hd_db_user:GvoxmmKHfCMOKVKBkpx6c1mQrQZ5hHHN@dpg-cvo1fgeuk2gs73bgj3eg-a.oregon-postgres.render.com:5432/aoe2hd_db"
 ).strip()
 
 # ------------------------------------------------------------------------
@@ -21,7 +23,7 @@ DATABASE_URL = os.getenv(
 ssl_context = ssl.create_default_context()
 
 # ------------------------------------------------------------------------
-# Create the async engine and sessionmaker, providing the ssl context.
+# Create the async engine and sessionmaker, providing the SSL context.
 # ------------------------------------------------------------------------
 engine = create_async_engine(
     DATABASE_URL,
