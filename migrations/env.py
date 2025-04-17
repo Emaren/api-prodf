@@ -5,10 +5,13 @@ import json
 import pathlib
 from logging.config import fileConfig
 
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))  # 👈 Add this
+
 from alembic import context
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from db.models import Base  # your declarative_base
 from dotenv import load_dotenv
+
 
 # ─────────────────────────────────────────────
 # ✅ Load environment variables from .env

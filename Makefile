@@ -1,4 +1,5 @@
 # Makefile for AoE2HD Parsing App 🧠
+PYTHONPATH := $(shell pwd)
 
 # ─────────────────────────────
 # 🔧 ENVIRONMENT
@@ -117,3 +118,8 @@ backend-tab:
 tag:
 	git tag -a v$(tag) -m "$(msg)"
 	git push origin v$(tag)
+
+
+deploy-prod:
+	@./deploy_to_prod.sh
+
