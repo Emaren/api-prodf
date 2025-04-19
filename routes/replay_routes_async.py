@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +6,7 @@ from db.db import get_db
 from db.models import GameStats
 from datetime import datetime
 import json
+import logging
 
 router = APIRouter(prefix="/api", tags=["replay"])
 
@@ -26,9 +27,13 @@ class ParseReplayRequest(BaseModel):
 
 
 @router.post("/parse_replay")
-async def parse_new_replay(data: ParseReplayRequest, db_gen=Depends(get_db)):
+async def parse_new_replay(
+    data: ParseReplayRequest,
+    db_gen=Depends(get_db),
+    mode: str = Query(default=None)
+):
     async with db_gen as db:
-        if data.is_final:
+        if mode == "final" and data.is_final:
             existing = await db.execute(
                 select(GameStats).where(
                     GameStats.replay_hash == data.replay_hash,
@@ -36,6 +41,7 @@ async def parse_new_replay(data: ParseReplayRequest, db_gen=Depends(get_db)):
                 )
             )
             if existing.scalars().first():
+                logging.info(f"🛡️ Skipped duplicate final replay: {data.replay_hash}")
                 return {"message": "Replay already parsed as final. Skipped."}
 
         game = GameStats(

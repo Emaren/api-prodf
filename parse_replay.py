@@ -56,8 +56,13 @@ async def parse_and_send(replay_path: str, force: bool = False, parse_iteration:
         logging.warning(f"❌ Could not save .json: {e}")
 
     for target in api_targets:
-        url = ENDPOINTS.get(target) or target  # allow full custom URLs
-        full_url = url + ("?force=true" if force else "")
+        url = ENDPOINTS.get(target) or target
+        full_url = url
+        if force:
+            full_url += "?force=true"
+        elif is_final:
+            full_url += "?mode=final"
+
         try:
             logging.info(f"📤 Sending to [{target}] → {parsed['replay_file']}")
             response = requests.post(full_url, json=parsed)

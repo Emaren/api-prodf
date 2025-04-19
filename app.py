@@ -62,15 +62,24 @@ def root():
 @app.get("/api/game_stats")
 async def get_game_stats(db_gen=Depends(get_db)):
     try:
-        async with db_gen as db:  # ✅ unlocks the session
-            result = await db.execute(select(GameStats).order_by(GameStats.timestamp.desc()))
+        async with db_gen as db:
+            result = await db.execute(
+                select(GameStats)
+                .where(GameStats.is_final == True)
+                .order_by(GameStats.timestamp.desc())
+            )
             games = result.scalars().all()
-            from logging import getLogger
-            logger = getLogger(__name__)
-            logger.info(f"📊 Returning {len(games)} games from DB")
-            return [g.to_dict() for g in games]
+
+            # Optional: De-duplicate on replay_hash even more strictly
+            unique_games = {}
+            for game in games:
+                if game.replay_hash not in unique_games:
+                    unique_games[game.replay_hash] = game
+
+            logger = logging.getLogger(__name__)
+            logger.info(f"📊 Returning {len(unique_games)} unique games from DB")
+            return [g.to_dict() for g in unique_games.values()]
+
     except Exception as e:
-        import logging
         logging.error(f"❌ Failed to fetch game stats: {e}", exc_info=True)
         return []
-
