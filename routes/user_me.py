@@ -1,3 +1,4 @@
+# routes/user_me.py
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -5,16 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.db import get_db
 from db.models import User
 
-router = APIRouter()
-
+router = APIRouter(
+    prefix="/api/user",
+    tags=["user"]
+)
 
 class UserMeRequest(BaseModel):
     uid: str | None = None
     email: str | None = None
 
-
-@router.post("/api/user/me")
+@router.post("/me")
 async def get_user_me(data: UserMeRequest, db_gen=Depends(get_db)):
+    print(f"🔎 Received data: {data}")
     async with db_gen as db:
         user = None
 
@@ -30,3 +33,4 @@ async def get_user_me(data: UserMeRequest, db_gen=Depends(get_db)):
             raise HTTPException(status_code=404, detail="User not found")
 
         return user.to_dict()
+
