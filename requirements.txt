@@ -8,3 +8,5 @@ asyncpg
 SQLAlchemy[asyncio]
 aiofiles
 psycopg2-binary==2.9.6
+firebase-admin>=6.0.0
+

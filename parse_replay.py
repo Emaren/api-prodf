@@ -65,7 +65,13 @@ async def parse_and_send(replay_path: str, force: bool = False, parse_iteration:
 
         try:
             logging.info(f"📤 Sending to [{target}] → {parsed['replay_file']}")
-            response = requests.post(full_url, json=parsed)
+            headers = {}
+            token = os.environ.get("FIREBASE_AUTH_TOKEN") or config.get("firebase_auth_token")
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+
+            response = requests.post(full_url, json=parsed, headers=headers)
+
             if response.ok:
                 logging.info(f"✅ [{target}] Response: {response.status_code} - {response.text}")
             else:

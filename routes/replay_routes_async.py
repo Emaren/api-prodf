@@ -3,8 +3,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.db import get_db
-from db.models import GameStats
+from db.models import GameStats, User
 from datetime import datetime
+from routes.user_me import get_current_user
 import json
 import logging
 
@@ -30,7 +31,8 @@ class ParseReplayRequest(BaseModel):
 async def parse_new_replay(
     data: ParseReplayRequest,
     db_gen=Depends(get_db),
-    mode: str = Query(default=None)
+    current_user: User = Depends(get_current_user),
+    mode: str = Query(default=None),
 ):
     async with db_gen as db:
         if mode == "final" and data.is_final:
@@ -45,6 +47,7 @@ async def parse_new_replay(
                 return {"message": "Replay already parsed as final. Skipped."}
 
         game = GameStats(
+            user_uid=current_user.uid,  # ✅ Save user UID
             replay_file=data.replay_file,
             replay_hash=data.replay_hash,
             game_version=data.game_version,
