@@ -9,15 +9,19 @@ from db.models import GameStats
 from routes import (
     user_me,
     user_routes_async,
-    user_register,  # ✅ Added user_register here
+    user_register,
     replay_routes_async,
     debug_routes_async,
     admin_routes_async,
+    bets,
 )
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+# ───────────────────────────────────────────────
+# 🔍 Log incoming requests
+# ───────────────────────────────────────────────
 class LogRequestMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         print(f"📩 Incoming Request: {request.method} {request.url}")
@@ -25,7 +29,6 @@ class LogRequestMiddleware(BaseHTTPMiddleware):
         return response
 
 app = FastAPI()
-
 app.add_middleware(LogRequestMiddleware)
 
 # ───────────────────────────────────────────────
@@ -37,8 +40,10 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
-        "https://aoe2-betting.vercel.app",
-        "https://aoe2hd-frontend.onrender.com",
+        "https://aoe2-betting.vercel.app",     
+        "https://aoe2hd-frontend.onrender.com", 
+        "https://aoe2hdbets.com",              
+        "https://www.aoe2hdbets.com",  
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -51,20 +56,19 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     await init_db_async()
-    # 🧠 Print all registered routes
     for route in app.routes:
         print(f"✅ {route.path}")
-
 
 # ───────────────────────────────────────────────
 # 📦 Include All Routers
 # ───────────────────────────────────────────────
 app.include_router(user_me.router)
 app.include_router(user_routes_async.router)
-app.include_router(user_register.router)  # ✅ Included the register router!
+app.include_router(user_register.router)
 app.include_router(replay_routes_async.router)
 app.include_router(debug_routes_async.router)
 app.include_router(admin_routes_async.router)
+app.include_router(bets.router)
 
 # ───────────────────────────────────────────────
 # 🧪 Root Test Route
@@ -74,7 +78,7 @@ def root():
     return {"message": "AoE2 Betting Backend is running!"}
 
 # ───────────────────────────────────────────────
-# 📊 Postgres-Backed Game Stats Endpoint
+# 📊 Game Stats Endpoint
 # ───────────────────────────────────────────────
 @app.get("/api/game_stats")
 async def get_game_stats(db_gen=Depends(get_db)):
@@ -86,17 +90,20 @@ async def get_game_stats(db_gen=Depends(get_db)):
                 .order_by(GameStats.timestamp.desc())
             )
             games = result.scalars().all()
-
-            # Optional: De-duplicate based on replay_hash
             unique_games = {}
             for game in games:
                 if game.replay_hash not in unique_games:
                     unique_games[game.replay_hash] = game
 
-            logger = logging.getLogger(__name__)
-            logger.info(f"📊 Returning {len(unique_games)} unique games from DB")
+            logging.getLogger(__name__).info(f"📊 Returning {len(unique_games)} unique games from DB")
             return [g.to_dict() for g in unique_games.values()]
-
     except Exception as e:
         logging.error(f"❌ Failed to fetch game stats: {e}", exc_info=True)
         return []
+
+# ───────────────────────────────────────────────
+# 🔗 Chain ID Endpoint
+# ───────────────────────────────────────────────
+@app.get("/api/chain-id")
+def get_chain_id():
+    return {"chain_id": "wolochain"}
