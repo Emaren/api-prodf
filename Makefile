@@ -67,16 +67,15 @@ prod-rebuild:
 # 🧬 MIGRATIONS
 # ─────────────────────────────
 
-migrate:
-	alembic revision --autogenerate -m "$(msg)"
+new-migration:
+	@read -p "Migration name: " name; \
+	alembic revision --autogenerate -m "$$name"
 
 migrate-dev:
-	alembic upgrade head
+	./scripts/migrate.sh local
 
 migrate-prod:
-	@echo "🚀 Deploying migrations to production..."
-	PGPASSWORD=$(PROD_DB_PASS) alembic -x db_url="$(PROD_DB_URL)" upgrade head
-	@echo "✅ Production schema updated successfully!"
+	./scripts/migrate.sh render
 
 stamp:
 	alembic stamp head
@@ -119,7 +118,5 @@ tag:
 	git tag -a v$(tag) -m "$(msg)"
 	git push origin v$(tag)
 
-
 deploy-prod:
 	@./deploy_to_prod.sh
-

@@ -18,6 +18,7 @@ if not env_loaded:
     env_file = (
         ".env.production" if ENV == "production"
         else ".env.dev" if ENV == "dev"
+        else ".env.fastdev" if ENV == "fastdev"
         else ".env"
     )
     env_path = os.path.join(BASE_DIR, env_file)

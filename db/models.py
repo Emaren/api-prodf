@@ -35,6 +35,7 @@ class User(Base):
     lock_name = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     token = Column(String(128), nullable=True)
+    last_seen = Column(DateTime, default=None)  # ✅ NEW: for online tracking
 
     def __repr__(self):
         return f"<User {self.uid}>"
@@ -50,6 +51,7 @@ class User(Base):
             "lock_name": self.lock_name,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "token": self.token,
+            "last_seen": self.last_seen.isoformat() if self.last_seen else None,  # ✅ Include in output
         }
 
 # ───────────────────────────────────────────────
@@ -77,10 +79,9 @@ class GameStats(Base):
     parse_iteration = Column(Integer, default=0)
     is_final = Column(Boolean, default=False)
 
-    # 🧠 Additional metadata
     disconnect_detected = Column(Boolean, default=False)
-    parse_source = Column(String(20), default="unknown")       # watcher / manual / other
-    parse_reason = Column(String(50), default="unspecified")   # realtime watch / manual debug / recovery
+    parse_source = Column(String(20), default="unknown")
+    parse_reason = Column(String(50), default="unspecified")
     original_filename = Column(String(255), nullable=True)
 
     __table_args__ = (
@@ -132,7 +133,6 @@ class GameStats(Base):
                 trace_path = self.replay_file + ".trace"
                 with open(trace_path, "w") as f:
                     f.write(trace_block + "\n")
-
                 with open("trace.index", "a") as idx:
                     idx.write(f"{datetime.utcnow().isoformat()} - {self.replay_file}\n")
             except Exception as e:

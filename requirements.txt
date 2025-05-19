@@ -7,6 +7,6 @@ mgz==1.8.27
 asyncpg
 SQLAlchemy[asyncio]
 aiofiles
-psycopg2-binary==2.9.6
+psycopg[binary]
 firebase-admin>=6.0.0
 

@@ -1,16 +1,19 @@
+# db/db.py
 import os
-import logging
 import ssl
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
 from fastapi import Depends
 
 # ------------------------------------------------------------------------
-# Load DB URL from the environment, stripping extraneous whitespace/newlines.
-# If not set, use the fallback external Render URL with literal credentials.
-# Note: Do not include "?sslmode=require" in the URL because asyncpg does not accept it.
-# SSL will be provided via the ssl_context.
+# ✅ Load environment using layered logic in config.py
+# ------------------------------------------------------------------------
+import config  # this triggers .env loading and debug prints
+
+# ------------------------------------------------------------------------
+# Read DATABASE_URL from env or fallback to Render production DB
 # ------------------------------------------------------------------------
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -18,17 +21,19 @@ DATABASE_URL = os.getenv(
 ).strip()
 
 # ------------------------------------------------------------------------
-# Create a default SSL context for secure connections.
+# Enable SSL only for remote DB connections
 # ------------------------------------------------------------------------
-ssl_context = ssl.create_default_context()
+connect_args = {}
+if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
+    connect_args["ssl"] = ssl.create_default_context()
 
 # ------------------------------------------------------------------------
-# Create the async engine and sessionmaker, providing the SSL context.
+# Create async engine and sessionmaker
 # ------------------------------------------------------------------------
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"ssl": ssl_context}
+    connect_args=connect_args
 )
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -37,7 +42,6 @@ async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False
 # ------------------------------------------------------------------------
 async def init_db_async():
     try:
-        # Delayed import to avoid circular dependency issues.
         from db.models import Base
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -47,10 +51,17 @@ async def init_db_async():
         raise
 
 # ------------------------------------------------------------------------
-# Dependency: Provide an async DB session.
+# Dependency: Provide an async DB session as a context manager
 # ------------------------------------------------------------------------
 @asynccontextmanager
 async def get_db():
+    async with async_session() as session:
+        yield session
+
+# ------------------------------------------------------------------------
+# ✅ Dependency: Provide async DB session for FastAPI Depends()
+# ------------------------------------------------------------------------
+async def get_async_session() -> AsyncSession:
     async with async_session() as session:
         yield session
 

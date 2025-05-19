@@ -14,7 +14,7 @@ router = APIRouter(
 )
 
 # ───────────────────────────────────────────────
-# 🔐 Firebase Auth + FastAPI Dependency
+# 🔐 Firebase Auth Dependency
 # ───────────────────────────────────────────────
 auth_scheme = HTTPBearer()
 
@@ -34,15 +34,25 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 # ───────────────────────────────────────────────
-# 🧾 Manual Fallback API for Debug
+# 🧾 Manual Fallback API for Debug or PWA
 # ───────────────────────────────────────────────
 class UserMeRequest(BaseModel):
     uid: str | None = None
     email: str | None = None
+    in_game_name: str | None = None
+
+def slim_user(user: User) -> dict:
+    return {
+        "uid": user.uid,
+        "email": user.email,
+        "in_game_name": user.in_game_name,
+        "verified": user.verified,
+        "wallet_address": user.wallet_address,
+    }
 
 @router.post("/me")
-async def get_user_me(data: UserMeRequest, db_gen=Depends(get_db)):
-    print(f"🔎 Received data: {data}")
+async def get_or_create_user(data: UserMeRequest, db_gen=Depends(get_db)):
+    print(f"🔎 /me request: {data}")
     async with db_gen as db:
         user = None
 
@@ -54,9 +64,23 @@ async def get_user_me(data: UserMeRequest, db_gen=Depends(get_db)):
             result = await db.execute(select(User).where(User.email == data.email))
             user = result.scalar_one_or_none()
 
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        if user:
+            return slim_user(user)
 
-        return user.to_dict()
+        # 🚨 If no user found, create a new one if enough data is provided
+        if not data.uid or not data.email or not data.in_game_name:
+            raise HTTPException(status_code=404, detail="User not found and missing required fields to create.")
+
+        new_user = User(
+            uid=data.uid,
+            email=data.email,
+            in_game_name=data.in_game_name,
+            verified=False,
+        )
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+
+        return slim_user(new_user)
 
 __all__ = ["get_current_user"]
