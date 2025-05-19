@@ -6,30 +6,31 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
 from fastapi import Depends
+import config  # triggers layered .env loading and debug output
 
-# ------------------------------------------------------------------------
-# ✅ Load environment using layered logic in config.py
-# ------------------------------------------------------------------------
-import config  # this triggers .env loading and debug prints
-
-# ------------------------------------------------------------------------
-# Read DATABASE_URL from env or fallback to Render production DB
-# ------------------------------------------------------------------------
-DATABASE_URL = os.getenv(
+# ────────────────────────────────────────────────────────────────
+# 🛠 Fix DATABASE_URL scheme if Render injects 'postgres://'
+# ────────────────────────────────────────────────────────────────
+raw_url = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://aoe2hd_db_user:GvoxmmKHfCMOKVKBkpx6c1mQrQZ5hHHN@dpg-cvo1fgeuk2gs73bgj3eg-a.oregon-postgres.render.com:5432/aoe2hd_db"
 ).strip()
 
-# ------------------------------------------------------------------------
-# Enable SSL only for remote DB connections
-# ------------------------------------------------------------------------
+if raw_url.startswith("postgres://"):
+    raw_url = raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+DATABASE_URL = raw_url
+
+# ────────────────────────────────────────────────────────────────
+# 🌐 SSL Context for Remote DB
+# ────────────────────────────────────────────────────────────────
 connect_args = {}
 if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
     connect_args["ssl"] = ssl.create_default_context()
 
-# ------------------------------------------------------------------------
-# Create async engine and sessionmaker
-# ------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────
+# 🚀 SQLAlchemy Async Engine + Session
+# ────────────────────────────────────────────────────────────────
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
@@ -37,37 +38,43 @@ engine = create_async_engine(
 )
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-# ------------------------------------------------------------------------
-# Async DB Initialization: Create all tables using the declarative Base.
-# ------------------------------------------------------------------------
-async def init_db_async():
-    try:
-        from db.models import Base
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logging.info("✅ Async tables created.")
-    except Exception as e:
-        logging.error(f"❌ Failed to initialize DB async: {e}")
-        raise
+# ────────────────────────────────────────────────────────────────
+# 📦 DB Init w/ Retry for Render cold-start race condition
+# ────────────────────────────────────────────────────────────────
+import asyncpg
+import asyncio
 
-# ------------------------------------------------------------------------
-# Dependency: Provide an async DB session as a context manager
-# ------------------------------------------------------------------------
+async def init_db_async():
+    from db.models import Base
+    retries = 5
+    for attempt in range(retries):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logging.info("✅ Async tables created.")
+            return
+        except asyncpg.exceptions.ConnectionDoesNotExistError as e:
+            logging.warning(f"🔁 Retry DB connection ({attempt + 1}/{retries})...")
+            await asyncio.sleep(2)
+        except Exception as e:
+            logging.error(f"❌ DB init failed: {e}")
+            raise
+
+# ────────────────────────────────────────────────────────────────
+# 🤝 DB Session Dependency
+# ────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def get_db():
     async with async_session() as session:
         yield session
 
-# ------------------------------------------------------------------------
-# ✅ Dependency: Provide async DB session for FastAPI Depends()
-# ------------------------------------------------------------------------
 async def get_async_session() -> AsyncSession:
     async with async_session() as session:
         yield session
 
-# ------------------------------------------------------------------------
-# Example helper method: Retrieve a user by UID.
-# ------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────
+# 🔍 Example Helper Functions
+# ────────────────────────────────────────────────────────────────
 async def get_user_by_uid(uid: str):
     from db.models import User
     async with async_session() as session:
@@ -76,9 +83,6 @@ async def get_user_by_uid(uid: str):
         )
         return result.scalar_one_or_none()
 
-# ------------------------------------------------------------------------
-# Example helper method: Retrieve a user by email.
-# ------------------------------------------------------------------------
 async def get_user_by_email(email: str):
     from db.models import User
     async with async_session() as session:
