@@ -34,7 +34,10 @@ if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args=connect_args
+    connect_args=connect_args,
+    pool_pre_ping=True,            
+    pool_recycle=300,            
+    pool_timeout=30,                
 )
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
