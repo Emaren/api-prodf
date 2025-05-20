@@ -7,14 +7,14 @@ env_loaded = False
 
 # ✅ 1. Prefer .env.override
 override_path = os.path.join(BASE_DIR, ".env.override")
-if os.path.exists(override_path):
+if os.getenv("ENV", "development") != "production" and os.path.exists(override_path):
     load_dotenv(dotenv_path=override_path)
     env_loaded = True
-    print("✅ Loaded override from .env.override")
+    print("✅ Loaded override from .env.override (dev only)")
 
 # ✅ 2. Fallback based on ENV
 if not env_loaded:
-    ENV = os.getenv("ENV", "development")
+    ENV = os.getenv("ENV", os.getenv("RENDER", False) and "production" or "development")
     env_file = (
         ".env.production" if ENV == "production"
         else ".env.dev" if ENV == "dev"
@@ -31,7 +31,8 @@ if not env_loaded:
 
 # ✅ 3. Always allow .env.local as final override
 local_path = os.path.join(BASE_DIR, ".env.local")
-if os.path.exists(local_path):
+# Only load .env.local in dev mode
+if os.getenv("ENV", "development") == "development" and os.path.exists(local_path):
     load_dotenv(dotenv_path=local_path, override=True)
     print("✅ Loaded .env.local (final override layer)")
 
