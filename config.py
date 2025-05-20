@@ -5,16 +5,18 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 env_loaded = False
 
-# ✅ 1. Prefer .env.override
+# Get ENV early
+ENV = os.getenv("ENV", os.getenv("RENDER", False) and "production" or "development")
+
+# ✅ 1. Prefer .env.override only in development
 override_path = os.path.join(BASE_DIR, ".env.override")
-if os.getenv("ENV", "development") != "production" and os.path.exists(override_path):
+if ENV != "production" and os.path.exists(override_path):
     load_dotenv(dotenv_path=override_path)
     env_loaded = True
     print("✅ Loaded override from .env.override (dev only)")
 
-# ✅ 2. Fallback based on ENV
+# ✅ 2. Load env-specific file (production/dev/etc)
 if not env_loaded:
-    ENV = os.getenv("ENV", os.getenv("RENDER", False) and "production" or "development")
     env_file = (
         ".env.production" if ENV == "production"
         else ".env.dev" if ENV == "dev"
@@ -29,12 +31,11 @@ if not env_loaded:
     else:
         print(f"⚠️ No env file found for {ENV}. Proceeding with defaults.")
 
-# ✅ 3. Always allow .env.local as final override
+# ✅ 3. Load .env.local last, but only in dev mode
 local_path = os.path.join(BASE_DIR, ".env.local")
-# Only load .env.local in dev mode
-if os.getenv("ENV", "development") == "development" and os.path.exists(local_path):
+if ENV == "development" and os.path.exists(local_path):
     load_dotenv(dotenv_path=local_path, override=True)
-    print("✅ Loaded .env.local (final override layer)")
+    print("✅ Loaded .env.local (final override layer for dev)")
 
 # --- Exports ---
 def get_fastapi_api_url():
@@ -59,5 +60,6 @@ def load_config():
         raise RuntimeError(f"❌ Failed to load config.json: {e}")
 
 # ✅ Debug print
-print(f"🚀 ENV is: {os.getenv('ENV', 'development')}")
+print(f"🚀 ENV is: {ENV}")
 print(f"🌐 FASTAPI_API_URL is: {os.getenv('FASTAPI_API_URL')}")
+print(f"🐘 DATABASE_URL: {os.getenv('DATABASE_URL')}")
