@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import logging
+import os
 
 from routes import user_ping
 from db.db import init_db_async, get_db
@@ -20,6 +21,7 @@ from routes import (
     admin_routes_async,
     bets,
 )
+print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
 
 # ───────────────────────────────────────────────
 # 🔍 Log incoming requests
