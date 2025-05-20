@@ -1,5 +1,7 @@
-from fastapi import FastAPI, Depends
+# app.py
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import logging
@@ -16,17 +18,18 @@ from routes import (
     bets,
 )
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-
 # ───────────────────────────────────────────────
 # 🔍 Log incoming requests
 # ───────────────────────────────────────────────
 class LogRequestMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         print(f"📩 Incoming Request: {request.method} {request.url}")
-        response = await call_next(request)
-        return response
+        if "authorization" in request.headers:
+            token_preview = request.headers["authorization"][:40]
+            print(f"🔑 Auth Header (first 40 chars): {token_preview}...")
+        else:
+            print("⚠️ No Authorization header present.")
+        return await call_next(request)
 
 app = FastAPI()
 app.add_middleware(LogRequestMiddleware)
@@ -40,10 +43,10 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
-        "https://aoe2-betting.vercel.app",     
-        "https://aoe2hd-frontend.onrender.com", 
-        "https://aoe2hdbets.com",              
-        "https://www.aoe2hdbets.com",  
+        "https://aoe2-betting.vercel.app",
+        "https://aoe2hd-frontend.onrender.com",
+        "https://aoe2hdbets.com",
+        "https://www.aoe2hdbets.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],

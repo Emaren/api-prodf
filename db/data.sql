@@ -32,14 +32,14 @@ COPY public.alembic_version (version_num) FROM stdin;
 
 COPY public.users (id, uid, email, in_game_name, verified, wallet_address, lock_name, created_at, token) FROM stdin;
 1	test-uid	test@example.com	TestPlayer	f	\N	f	2025-05-19 01:26:34.068191	\N
-2	C00QUqpOj1aa4HwCINgPC96dz0Y2	tony.c8ccdb@aoe2hd.app		f	\N	f	2025-05-19 01:50:09.746593	\N
-3	FYWynYLY5qeBr3PubFAN9Rgvutz1	emaren.9c4e1f@aoe2hd.app		f	\N	f	2025-05-19 01:50:09.866882	\N
-4	VImcy265OzX2wv9js6RK5zI3yYD3	bola.92b50e@aoe2hd.app		f	\N	f	2025-05-19 01:50:09.868014	\N
-5	VjwrFIafbcY1cKEcTWx6Hakm2hJ3	verc.efe898@aoe2hd.app		f	\N	f	2025-05-19 01:50:09.868846	\N
-6	f8CtZAzvEAPh98yCUhFKMuemaXf2	local.c95131@aoe2hd.app		f	\N	f	2025-05-19 01:50:09.8697	\N
-7	m33Z9jbk3BNDS94LHesCEPfrFp52	rend.f015c7@aoe2hd.app		f	\N	f	2025-05-19 01:50:09.870569	\N
-8	vNbKKBCLL9Q7AYw1OhyCzvnaOWs2	local.fa55b6@aoe2hd.app		f	\N	f	2025-05-19 01:50:09.871309	\N
-9	a4e5c251-39c9-4ca9-8e53-154bd75b20e3	unknown@aoe2hd.app	Chrome	f	\N	f	2025-05-19 02:46:10.308087	\N
+2	C00QUqpOj1aa4HwCINgPC96dz0Y2	tony.c8ccdb@aoe2hdbets.com		f	\N	f	2025-05-19 01:50:09.746593	\N
+3	FYWynYLY5qeBr3PubFAN9Rgvutz1	emaren.9c4e1f@aoe2hdbets.com		f	\N	f	2025-05-19 01:50:09.866882	\N
+4	VImcy265OzX2wv9js6RK5zI3yYD3	bola.92b50e@aoe2hdbets.com		f	\N	f	2025-05-19 01:50:09.868014	\N
+5	VjwrFIafbcY1cKEcTWx6Hakm2hJ3	verc.efe898@aoe2hdbets.com		f	\N	f	2025-05-19 01:50:09.868846	\N
+6	f8CtZAzvEAPh98yCUhFKMuemaXf2	local.c95131@aoe2hdbets.com		f	\N	f	2025-05-19 01:50:09.8697	\N
+7	m33Z9jbk3BNDS94LHesCEPfrFp52	rend.f015c7@aoe2hdbets.com		f	\N	f	2025-05-19 01:50:09.870569	\N
+8	vNbKKBCLL9Q7AYw1OhyCzvnaOWs2	local.fa55b6@aoe2hdbets.com		f	\N	f	2025-05-19 01:50:09.871309	\N
+9	a4e5c251-39c9-4ca9-8e53-154bd75b20e3	unknown@aoe2hdbets.com	Chrome	f	\N	f	2025-05-19 02:46:10.308087	\N
 \.
 
 
