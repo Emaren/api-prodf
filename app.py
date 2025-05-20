@@ -8,6 +8,8 @@ import logging
 
 from db.db import init_db_async, get_db
 from db.models import GameStats
+from firebase_utils import initialize_firebase  # ✅ ADDED
+
 from routes import (
     user_me,
     user_routes_async,
@@ -54,10 +56,11 @@ app.add_middleware(
 )
 
 # ───────────────────────────────────────────────
-# 🔌 Async DB Init
+# 🔌 Startup: Firebase + DB
 # ───────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
+    initialize_firebase()  # ✅ ADDED
     await init_db_async()
     for route in app.routes:
         print(f"✅ {route.path}")
