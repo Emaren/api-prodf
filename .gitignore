@@ -5,3 +5,4 @@ firebase-admin-key.json
 trace.index
 trace.index
 serviceAccountKey.json
+node_modules

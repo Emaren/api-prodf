@@ -1,5 +1,5 @@
 # routes/user_register.py
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
@@ -7,7 +7,6 @@ from db.models import User
 from db.db import get_db
 from db.schemas import UserRegisterRequest
 from pydantic import BaseModel
-
 
 router = APIRouter()
 
@@ -18,16 +17,24 @@ class RegisterPayload(BaseModel):
 
 @router.post("/api/user/register")
 async def register_user(payload: UserRegisterRequest, db_gen=Depends(get_db)):
-    async with db_gen as db:  # ✅ Use this pattern
+    async with db_gen as db:
+        # ✅ Block duplicate UIDs (same user re-logging)
         existing_user = await db.execute(
             select(User).where(User.uid == payload.uid)
         )
         user = existing_user.scalar_one_or_none()
-
         if user:
             return {"message": "User already exists"}
 
-        # ✅ Count how many users exist to set first user as admin
+        # ✅ Block duplicate in-game names
+        name_check = await db.execute(
+            select(User).where(User.in_game_name == payload.in_game_name)
+        )
+        name_conflict = name_check.scalar_one_or_none()
+        if name_conflict:
+            raise HTTPException(status_code=400, detail="In-game name already taken")
+
+        # ✅ First user = admin
         count_result = await db.execute(select(func.count()).select_from(User))
         user_count = count_result.scalar()
         is_admin = user_count == 0
