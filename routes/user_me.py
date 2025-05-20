@@ -1,5 +1,6 @@
 # routes/user_me.py
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,12 +8,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from firebase_admin import auth
 
 from db.db import get_db
-from db.models.user import User  # import the modular User model
+from db.models.user import User
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
 # ───────────────────────────────────────────────
-# 🔐  Firebase bearer-token dependency (optional)
+# 🔐 Firebase bearer-token dependency
 # ───────────────────────────────────────────────
 auth_scheme = HTTPBearer()
 
@@ -22,18 +23,29 @@ async def get_current_user(
 ) -> User:
     """Validate the Firebase ID token and return the DB user."""
     try:
-        decoded = auth.verify_id_token(creds.credentials)
+        token = creds.credentials
+        print(f"🔐 Bearer token received: {token[:20]}...")
+
+        decoded = auth.verify_id_token(token)
         uid = decoded["uid"]
+        email = decoded.get("email", "unknown")
+        print(f"✅ Firebase decoded UID: {uid}, email: {email}")
+
         result = await db.execute(select(User).where(User.uid == uid))
         user = result.scalar_one_or_none()
+
         if not user:
+            print(f"❌ No user found in DB for UID: {uid}")
             raise HTTPException(status_code=404, detail="User not found")
+
+        print(f"✅ User found: {user.uid}")
         return user
     except Exception as e:
+        print(f"❌ Firebase token validation failed: {e}")
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 # ───────────────────────────────────────────────
-# 🧾  Manual fallback (PWA/offline or dev)
+# 🧾 Manual fallback: for dev, offline mode, or initial registration
 # ───────────────────────────────────────────────
 class UserMeRequest(BaseModel):
     uid: str | None = None
@@ -42,44 +54,51 @@ class UserMeRequest(BaseModel):
 
 @router.post("/me")
 async def get_or_create_user(data: UserMeRequest, db_gen=Depends(get_db)):
-    """Return the user if it exists; otherwise create it if enough data is given."""
-    print(f"🔎 /me request: {data}")
+    print(f"📥 POST /me — Payload: {data}")
 
-    async with db_gen as db:
-        # 1️⃣  Try finding user by UID or email
-        user = None
-        if data.uid:
-            res = await db.execute(select(User).where(User.uid == data.uid))
-            user = res.scalar_one_or_none()
+    try:
+        async with db_gen as db:
+            # Try finding user by UID
+            if data.uid:
+                res = await db.execute(select(User).where(User.uid == data.uid))
+                user = res.scalar_one_or_none()
+                if user:
+                    print(f"✅ Found by UID: {user.uid}")
+                    return user.to_dict()
 
-        if not user and data.email:
-            res = await db.execute(select(User).where(User.email == data.email))
-            user = res.scalar_one_or_none()
+            # Try finding user by email
+            if data.email:
+                res = await db.execute(select(User).where(User.email == data.email))
+                user = res.scalar_one_or_none()
+                if user:
+                    print(f"✅ Found by email: {user.email}")
+                    return user.to_dict()
 
-        if user:
-            return user.to_dict()        # ✅ includes `is_admin`
+            # Not found — check if enough info is provided to create one
+            if not (data.uid and data.email and data.in_game_name):
+                print("⚠️ Missing data — can't create user")
+                raise HTTPException(status_code=404, detail="User not found and insufficient data to create.")
 
-        # 2️⃣  If user not found, create one (requires all fields)
-        if not (data.uid and data.email and data.in_game_name):
-            raise HTTPException(status_code=404, detail="User not found and insufficient data to create.")
+            # Count existing users
+            count_res = await db.execute(select(func.count()).select_from(User))
+            user_count: int = count_res.scalar()
+            is_admin = user_count == 0
 
-        # Determine whether this is the very first user
-        count_res = await db.execute(select(func.count()).select_from(User))
-        user_count: int = count_res.scalar()
-        is_admin = user_count == 0       # ✅ first user becomes admin
+            # Create new user
+            new_user = User(
+                uid=data.uid,
+                email=data.email,
+                in_game_name=data.in_game_name,
+                verified=False,
+                is_admin=is_admin,
+            )
+            db.add(new_user)
+            await db.commit()
+            await db.refresh(new_user)
 
-        new_user = User(
-            uid=data.uid,
-            email=data.email,
-            in_game_name=data.in_game_name,
-            verified=False,
-            is_admin=is_admin,
-        )
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
+            print(f"🆕 Created user {new_user.uid} | admin: {is_admin}")
+            return new_user.to_dict()
 
-        print(f"📌 Created user {new_user.uid} — is_admin={new_user.is_admin}")
-        return new_user.to_dict()        # ✅ includes `is_admin`
-
-__all__ = ["get_current_user"]
+    except Exception as e:
+        print(f"🔥 Unhandled error in /me route: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

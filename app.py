@@ -6,9 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import logging
 
+from routes import user_ping
 from db.db import init_db_async, get_db
 from db.models import GameStats
-from firebase_utils import initialize_firebase  # ✅ ADDED
+from firebase_utils import initialize_firebase  # ✅ NEW
 
 from routes import (
     user_me,
@@ -60,7 +61,7 @@ app.add_middleware(
 # ───────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    initialize_firebase()  # ✅ ADDED
+    initialize_firebase()  # ✅ Firebase now initialized at startup
     await init_db_async()
     for route in app.routes:
         print(f"✅ {route.path}")
@@ -75,6 +76,7 @@ app.include_router(replay_routes_async.router)
 app.include_router(debug_routes_async.router)
 app.include_router(admin_routes_async.router)
 app.include_router(bets.router)
+app.include_router(user_ping.router)
 
 # ───────────────────────────────────────────────
 # 🧪 Root Test Route
