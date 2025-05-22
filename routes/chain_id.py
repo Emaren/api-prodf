@@ -5,4 +5,4 @@ router = APIRouter()
 
 @router.get("/api/chain-id")
 async def get_chain_id():
-    return {"chainId": "wolochain"}
+    return {"chainId": "wolochain"}  # ✅ Consistent with frontend expectations

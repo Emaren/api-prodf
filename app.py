@@ -11,7 +11,7 @@ from db.db import init_db_async, get_db
 from db.models import GameStats
 from firebase_utils import initialize_firebase
 
-# ✅ ALL ROUTES HERE
+# ✅ Routes
 from routes import (
     user_me,
     user_routes_async,
@@ -21,17 +21,11 @@ from routes import (
     admin_routes_async,
     bets,
     user_ping,
-    chain_id,  # ✅ added
+    chain_id,  # ✅ NEW
 )
 
-# ───────────────────────────────────────────────
-# 🔍 ENV Check
-# ───────────────────────────────────────────────
 print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
 
-# ───────────────────────────────────────────────
-# 🔍 Log incoming requests
-# ───────────────────────────────────────────────
 class LogRequestMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         print(f"📩 Incoming Request: {request.method} {request.url}")
@@ -42,15 +36,9 @@ class LogRequestMiddleware(BaseHTTPMiddleware):
             print("⚠️ No Authorization header present.")
         return await call_next(request)
 
-# ───────────────────────────────────────────────
-# 🚀 Init App
-# ───────────────────────────────────────────────
 app = FastAPI()
 app.add_middleware(LogRequestMiddleware)
 
-# ───────────────────────────────────────────────
-# 🌐 Enable CORS
-# ───────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -67,9 +55,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ───────────────────────────────────────────────
-# 🔌 Startup: Firebase + DB
-# ───────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
     initialize_firebase()
@@ -77,9 +62,6 @@ async def startup_event():
     for route in app.routes:
         print(f"✅ {route.path}")
 
-# ───────────────────────────────────────────────
-# 📦 Include All Routers
-# ───────────────────────────────────────────────
 app.include_router(user_me.router)
 app.include_router(user_routes_async.router)
 app.include_router(user_register.router)
@@ -88,18 +70,12 @@ app.include_router(debug_routes_async.router)
 app.include_router(admin_routes_async.router)
 app.include_router(bets.router)
 app.include_router(user_ping.router)
-app.include_router(chain_id.router)  # ✅ now handled by its own module
+app.include_router(chain_id.router)  # ✅ NEW
 
-# ───────────────────────────────────────────────
-# 🧪 Root Test Route
-# ───────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"message": "AoE2 Betting Backend is running!"}
 
-# ───────────────────────────────────────────────
-# 📊 Game Stats Endpoint
-# ───────────────────────────────────────────────
 @app.get("/api/game_stats")
 async def get_game_stats(db_gen=Depends(get_db)):
     try:
