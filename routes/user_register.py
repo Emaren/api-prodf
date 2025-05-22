@@ -6,30 +6,20 @@ from sqlalchemy import func
 from db.models import User
 from db.db import get_db
 from db.schemas import UserRegisterRequest
-from pydantic import BaseModel
 
 router = APIRouter()
 
-class RegisterPayload(BaseModel):
-    uid: str
-    email: str
-    in_game_name: str
-
 @router.post("/api/user/register")
-async def register_user(payload: UserRegisterRequest, db_gen=Depends(get_db)):
-    async with db_gen as db:
+async def register_user(payload: UserRegisterRequest, db: AsyncSession = Depends(get_db)):
+    try:
         # ✅ Block duplicate UIDs (same user re-logging)
-        existing_user = await db.execute(
-            select(User).where(User.uid == payload.uid)
-        )
+        existing_user = await db.execute(select(User).where(User.uid == payload.uid))
         user = existing_user.scalar_one_or_none()
         if user:
             return {"message": "User already exists"}
 
         # ✅ Block duplicate in-game names
-        name_check = await db.execute(
-            select(User).where(User.in_game_name == payload.in_game_name)
-        )
+        name_check = await db.execute(select(User).where(User.in_game_name == payload.in_game_name))
         name_conflict = name_check.scalar_one_or_none()
         if name_conflict:
             raise HTTPException(status_code=400, detail="In-game name already taken")
@@ -48,5 +38,10 @@ async def register_user(payload: UserRegisterRequest, db_gen=Depends(get_db)):
 
         db.add(new_user)
         await db.commit()
+        await db.refresh(new_user)
 
         return {"message": "User registered", "is_admin": is_admin}
+
+    except Exception as e:
+        print(f"❌ Error during registration: {e}")
+        raise HTTPException(status_code=500, detail="Failed to register user")
