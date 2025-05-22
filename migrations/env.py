@@ -55,6 +55,8 @@ def do_run_migrations(sync_connection):
     context.run_migrations()
 
 async def run_migrations_online():
+    config.set_main_option("sqlalchemy.url", DB_URL)
+
     if DB_URL.startswith("postgresql+asyncpg"):
         connectable: AsyncEngine = create_async_engine(DB_URL, future=True)
         async with connectable.begin() as conn:
@@ -63,6 +65,7 @@ async def run_migrations_online():
         connectable = create_engine(DB_URL, future=True)
         with connectable.begin() as conn:
             do_run_migrations(conn)
+
 
 def run_async():
     asyncio.run(run_migrations_online())
