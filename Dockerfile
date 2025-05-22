@@ -18,6 +18,5 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Instead, just run your Python app (or Uvicorn)
-CMD alembic upgrade head && uvicorn app:app --host 0.0.0.0 --port 8002
-
+EXPOSE 8000
+CMD alembic upgrade head && uvicorn app:app --host 0.0.0.0 --port 8000
