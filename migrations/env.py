@@ -22,17 +22,13 @@ if dotenv_path.exists():
 
 # Resolve database URL from Alembic CLI args, config.json, env, or fallback
 cli_args = context.get_x_argument(as_dictionary=True)
-DB_URL = cli_args.get("db_url")
+DB_URL = (
+    context.get_x_argument(as_dictionary=True).get("db_url")
+    or os.getenv("DATABASE_URL")
+)
 
 if not DB_URL:
-    config_json_path = pathlib.Path(__file__).parent.parent / "config.json"
-    if config_json_path.exists():
-        with open(config_json_path) as f:
-            DB_URL = json.load(f).get("DATABASE_URL")
-
-DB_URL = DB_URL or os.getenv("DATABASE_URL")
-if not DB_URL:
-    raise RuntimeError("❌ DATABASE_URL not set. Make sure it's provided in the environment.")
+    raise RuntimeError("❌ DATABASE_URL is not set. Failing migration.")
 
 # Alembic config object
 config = context.config
