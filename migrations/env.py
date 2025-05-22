@@ -30,7 +30,9 @@ if not DB_URL:
         with open(config_json_path) as f:
             DB_URL = json.load(f).get("DATABASE_URL")
 
-DB_URL = DB_URL or os.getenv("DATABASE_URL") or "postgresql+asyncpg://aoe2user:postgres@localhost:5432/aoe2db"
+DB_URL = DB_URL or os.getenv("DATABASE_URL")
+if not DB_URL:
+    raise RuntimeError("❌ DATABASE_URL not set. Make sure it's provided in the environment.")
 
 # Alembic config object
 config = context.config
