@@ -1,11 +1,2 @@
 {"users": [
-{
-  "localId": "0RMYysbNE2a9lsxtl6DmNWEpExv1",
-  "email": "523b1a13-eed1-4982-962b-c3b03145c808@aoe2hdbets.com",
-  "emailVerified": false,
-  "passwordHash": "b1ou6jYWLBChNclvjyP6UXUttzvfaQG71ktgcxUuFnnsbTNs4kItaOmp8WuGXoeNqInPJBkHOFrfqZlrlHf2OA==",
-  "salt": "mR9HKBWDDacDSw==",
-  "lastSignedInAt": "1747889689362",
-  "createdAt": "1747889689362",
-  "providerUserInfo": []
-}]}
+]}
