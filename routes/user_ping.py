@@ -9,6 +9,10 @@ from routes.user_me import get_current_user
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
+@router.get("/ping")
+async def ping_anonymous():
+    return {"status": "ok"}
+
 @router.post("/ping")
 async def ping_user(
     user: User = Depends(get_current_user),

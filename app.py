@@ -7,11 +7,11 @@ from sqlalchemy.future import select
 import logging
 import os
 
-from routes import user_ping
 from db.db import init_db_async, get_db
 from db.models import GameStats
-from firebase_utils import initialize_firebase  # ✅ NEW
+from firebase_utils import initialize_firebase
 
+# ✅ ALL ROUTES HERE
 from routes import (
     user_me,
     user_routes_async,
@@ -20,7 +20,13 @@ from routes import (
     debug_routes_async,
     admin_routes_async,
     bets,
+    user_ping,
+    chain_id,  # ✅ added
 )
+
+# ───────────────────────────────────────────────
+# 🔍 ENV Check
+# ───────────────────────────────────────────────
 print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
 
 # ───────────────────────────────────────────────
@@ -36,6 +42,9 @@ class LogRequestMiddleware(BaseHTTPMiddleware):
             print("⚠️ No Authorization header present.")
         return await call_next(request)
 
+# ───────────────────────────────────────────────
+# 🚀 Init App
+# ───────────────────────────────────────────────
 app = FastAPI()
 app.add_middleware(LogRequestMiddleware)
 
@@ -63,7 +72,7 @@ app.add_middleware(
 # ───────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    initialize_firebase()  # ✅ Firebase now initialized at startup
+    initialize_firebase()
     await init_db_async()
     for route in app.routes:
         print(f"✅ {route.path}")
@@ -79,6 +88,7 @@ app.include_router(debug_routes_async.router)
 app.include_router(admin_routes_async.router)
 app.include_router(bets.router)
 app.include_router(user_ping.router)
+app.include_router(chain_id.router)  # ✅ now handled by its own module
 
 # ───────────────────────────────────────────────
 # 🧪 Root Test Route
@@ -110,10 +120,3 @@ async def get_game_stats(db_gen=Depends(get_db)):
     except Exception as e:
         logging.error(f"❌ Failed to fetch game stats: {e}", exc_info=True)
         return []
-
-# ───────────────────────────────────────────────
-# 🔗 Chain ID Endpoint
-# ───────────────────────────────────────────────
-@app.get("/api/chain-id")
-def get_chain_id():
-    return {"chain_id": "wolochain"}
