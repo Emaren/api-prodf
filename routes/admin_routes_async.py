@@ -9,9 +9,13 @@ import os
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 # ───────────────────────────────────────────────
-# 🔐 Admin Token Verification
+# 🔐 Admin Token Verification (supports both headers)
 # ───────────────────────────────────────────────
-def verify_admin_token(token: str = Header(..., alias="X-Admin-Token")):
+def verify_admin_token(
+    authorization: str = Header(None),
+    x_admin_token: str = Header(None, alias="X-Admin-Token"),
+):
+    token = x_admin_token or (authorization.replace("Bearer ", "") if authorization else "")
     expected = os.getenv("ADMIN_TOKEN", "secretadmin")
     if token != expected:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -21,10 +25,11 @@ def verify_admin_token(token: str = Header(..., alias="X-Admin-Token")):
 # ───────────────────────────────────────────────
 @router.get("/users")
 async def list_users(
-    x_admin_token: str = Header(..., alias="X-Admin-Token"),
-    session: AsyncSession = Depends(get_async_session)
+    authorization: str = Header(None),
+    x_admin_token: str = Header(None, alias="X-Admin-Token"),
+    session: AsyncSession = Depends(get_async_session),
 ):
-    verify_admin_token(x_admin_token)
+    verify_admin_token(authorization, x_admin_token)
     result = await session.execute(select(User))
     users = result.scalars().all()
     return [u.to_dict() for u in users]
@@ -57,10 +62,11 @@ async def mark_user_online(
 @router.delete("/delete_user/{uid}")
 async def delete_user(
     uid: str,
-    x_admin_token: str = Header(..., alias="X-Admin-Token"),
-    session: AsyncSession = Depends(get_async_session)
+    authorization: str = Header(None),
+    x_admin_token: str = Header(None, alias="X-Admin-Token"),
+    session: AsyncSession = Depends(get_async_session),
 ):
-    verify_admin_token(x_admin_token)
+    verify_admin_token(authorization, x_admin_token)
 
     result = await session.execute(select(User).where(User.uid == uid))
     user = result.scalar_one_or_none()
