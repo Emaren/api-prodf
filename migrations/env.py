@@ -55,6 +55,7 @@ def do_run_migrations(sync_connection):
     context.run_migrations()
 
 async def run_migrations_online():
+    # Set the URL for Alembic’s config before doing anything
     config.set_main_option("sqlalchemy.url", DB_URL)
 
     if DB_URL.startswith("postgresql+asyncpg"):
