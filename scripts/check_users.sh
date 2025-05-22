@@ -28,7 +28,7 @@ if [ "$postgres_count" -gt 0 ]; then
   echo "👤 Postgres user details:"
   psql -h localhost -U aoe2user -d aoe2db -P pager=off -c \
     "SELECT email, in_game_name, CASE WHEN is_admin THEN '✅ admin' ELSE '❌' END AS role FROM users;" \
-    | tail -n +3 | head -n -2 | sed 's/^/   - /'
+    | sed '1d;$d' | sed 's/^/   - /'
 else
   echo "   No Postgres users found."
 fi
