@@ -1,5 +1,5 @@
 #!/bin/bash
-cd ~/projects/aoe2hd-parsing || exit 1
+cd /var/www/aoe2hdbets-api/aoe2hd-parsing || exit 1
 source .env.dbs
 
 # ───────────────────────────────────────────────

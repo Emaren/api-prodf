@@ -4,8 +4,6 @@ import ssl
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from contextlib import asynccontextmanager
-from fastapi import Depends
 import config  # triggers layered .env loading and debug output
 
 # ────────────────────────────────────────────────────────────────
@@ -13,7 +11,7 @@ import config  # triggers layered .env loading and debug output
 # ────────────────────────────────────────────────────────────────
 raw_url = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://aoe2hd_db_user:GvoxmmKHfCMOKVKBkpx6c1mQrQZ5hHHN@dpg-cvo1fgeuk2gs73bgj3eg-a.oregon-postgres.render.com:5432/aoe2hd_db"
+    "postgresql+asyncpg://aoe2hd_user:aoe2hd_pass@localhost:5432/aoe2hd_db"
 ).strip()
 
 if raw_url.startswith("postgres://"):
@@ -66,12 +64,20 @@ async def init_db_async():
 # ────────────────────────────────────────────────────────────────
 # 🤝 DB Session Dependency
 # ────────────────────────────────────────────────────────────────
-@asynccontextmanager
-async def get_db():
+async def get_db() -> AsyncSession:
+    """
+    FastAPI dependency: yields an AsyncSession.
+    """
     async with async_session() as session:
         yield session
 
+# ────────────────────────────────────────────────────────────────
+# (Re-added) AsyncSession provider for routes that need it
+# ────────────────────────────────────────────────────────────────
 async def get_async_session() -> AsyncSession:
+    """
+    Alternate FastAPI dependency if you explicitly want an "async_session" name.
+    """
     async with async_session() as session:
         yield session
 

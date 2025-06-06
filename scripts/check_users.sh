@@ -1,5 +1,5 @@
 #!/bin/bash
-cd ~/projects/aoe2hd-parsing || exit 1
+cd /var/www/aoe2hdbets-api/aoe2hd-parsing || exit 1
 
 # Export Firebase users to JSON
 firebase auth:export users.json --format=json > /dev/null

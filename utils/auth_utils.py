@@ -4,7 +4,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from firebase_admin import auth
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-
 from db.db import get_db
 from db.models.user import User
 
@@ -16,7 +15,7 @@ async def get_current_user(
 ) -> User:
     try:
         token = creds.credentials
-        print(f"🔐 Bearer token received: {token[:20]}...")
+        print(f"🔐 Bearer token received: {token[:40]}...")
 
         decoded = auth.verify_id_token(token)
         uid = decoded["uid"]
@@ -25,9 +24,14 @@ async def get_current_user(
 
         result = await db.execute(select(User).where(User.uid == uid))
         user = result.scalar_one_or_none()
+
         if not user:
-            print(f"❌ No user found in DB for UID: {uid}")
-            raise HTTPException(status_code=404, detail="User not found")
+            print(f"🆕 No DB user found — creating for UID: {uid}")
+            new_user = User(uid=uid, email=email, in_game_name=None, is_admin=False, verified=False)
+            db.add(new_user)
+            await db.commit()
+            await db.refresh(new_user)
+            return new_user
 
         return user
 

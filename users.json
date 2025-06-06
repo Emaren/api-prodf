@@ -1,21 +1,2 @@
 {"users": [
-{
-  "localId": "3UCRABl4aKS9TEwzKkle0MtK6DA2",
-  "email": "cb91fba1-9cfe-44ef-abe2-7fce815f2a01@aoe2hdbets.com",
-  "emailVerified": false,
-  "passwordHash": "M9/ufNAGgGS+aEDUZhHJxcbvk8rPfvFsAOmV+MJoHNv4wdmwH3UcCBF5nHrcBbeNZIruShc3fIybuMaA5WnK5w==",
-  "salt": "gXUCahoqnnG9Rw==",
-  "lastSignedInAt": "1747900226193",
-  "createdAt": "1747900226193",
-  "providerUserInfo": []
-},
-{
-  "localId": "xfrTUZV1WicrGS1WfopQXcSiA7x1",
-  "email": "f8dd9d66-4edd-436f-b04e-20a83afcac53@aoe2hdbets.com",
-  "emailVerified": false,
-  "passwordHash": "XywF2f8tR5udcic1nRYBeLLPoiqXPDpdYywQRtQYSOKiMpCGn0P8ju+X1EvTVxh66RVXaEnb4rJhH6NBxvS1Fw==",
-  "salt": "Bf/sIEH6UMgUTA==",
-  "lastSignedInAt": "1747900175625",
-  "createdAt": "1747898076916",
-  "providerUserInfo": []
-}]}
+]}
