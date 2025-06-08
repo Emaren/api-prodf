@@ -12,17 +12,27 @@ router = APIRouter()
 @router.post("/api/user/register")
 async def register_user(payload: UserRegisterRequest, db: AsyncSession = Depends(get_db)):
     try:
+        # 🚫 Blank or whitespace-only name
+        if not payload.in_game_name or not payload.in_game_name.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={"field": "in_game_name", "error": "In-game name cannot be blank"}
+            )
+
         # ✅ Block duplicate UIDs (same user re-logging)
         existing_user = await db.execute(select(User).where(User.uid == payload.uid))
         user = existing_user.scalar_one_or_none()
         if user:
             return {"message": "User already exists"}
 
-        # ✅ Block duplicate in-game names
+        # 🚫 Duplicate in-game name
         name_check = await db.execute(select(User).where(User.in_game_name == payload.in_game_name))
         name_conflict = name_check.scalar_one_or_none()
         if name_conflict:
-            raise HTTPException(status_code=400, detail="In-game name already taken")
+            raise HTTPException(
+                status_code=400,
+                detail={"field": "in_game_name", "error": "In-game name already taken"}
+            )
 
         # ✅ First user = admin
         count_result = await db.execute(select(func.count()).select_from(User))

@@ -5,9 +5,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy.exc import IntegrityError
 import firebase_admin
 from firebase_admin import auth, credentials
+from sqlalchemy import desc
 
 from db.db import get_db
 from db.models import User, GameStats
@@ -36,7 +37,7 @@ async def verify_firebase_token(
 
 
 # ——————————————————————————————————————————————————————————
-# 1) The new `/me` endpoint
+# 1) The `/me` endpoint
 # ——————————————————————————————————————————————————————————
 
 class MeRequest(BaseModel):
@@ -56,23 +57,38 @@ async def me(
     body.uid = decoded_token["uid"]
     body.email = decoded_token.get("email")
 
-    # 1) try find existing user
+    # 1) try to find existing user
     result = await db.execute(select(User).where(User.uid == body.uid))
     user = result.scalar_one_or_none()
 
-    # 2) if not found, create (must supply in_game_name)
+    # 2) create new user if not found
     if not user:
         if not body.in_game_name:
             raise HTTPException(status_code=400, detail="First-time users must supply in_game_name")
+
+        # determine admin status
+        result = await db.execute(select(User).limit(1))
+        first_user = result.scalar_one_or_none()
+        is_admin = first_user is None
+
+        print(f"[CREATE USER] {body.email} — Admin: {is_admin}")
+
         user = User(
             uid=body.uid,
             email=body.email,
             in_game_name=body.in_game_name,
-            verified=True,
+            verified=False,
+            is_admin=is_admin,
         )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+
+        db.add(user)  # ✅ this line was missing
+
+        try:
+            await db.commit()
+            await db.refresh(user)
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(status_code=400, detail="In-game name already taken")
 
     # 3) return the record
     return {
@@ -82,6 +98,7 @@ async def me(
         "in_game_name": user.in_game_name,
         "verified": user.verified,
         "wallet_address": user.wallet_address,
+        "is_admin": user.is_admin,
     }
 
 
@@ -103,7 +120,6 @@ async def update_name(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # prevent name‐change during lock/active match
     if user.in_game_name and user.lock_name:
         raise HTTPException(status_code=403, detail="Name change is locked during a match")
     if user.in_game_name:
@@ -115,6 +131,12 @@ async def update_name(
         )
         if m.scalar_one_or_none():
             raise HTTPException(status_code=403, detail="Cannot change name during an active match")
+
+    conflict = await db.execute(
+        select(User).where(User.in_game_name == data.in_game_name)
+    )
+    if conflict.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="That in-game name is already taken")
 
     user.in_game_name = data.in_game_name
     await db.commit()
@@ -139,16 +161,18 @@ async def update_wallet(
     await db.commit()
     return {"message": "Wallet updated"}
 
-
 @router.get("/online")
 async def get_online_users(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.in_game_name.isnot(None)))
+    result = await db.execute(
+        select(User)
+        .where(User.in_game_name.isnot(None))
+        .order_by(desc(User.last_seen))
+    )
     users = result.scalars().all()
     return [
         {"uid": u.uid, "in_game_name": u.in_game_name, "verified": u.verified}
         for u in users
     ]
-
 
 @router.post("/verify_token")
 async def verify_token(
@@ -171,3 +195,11 @@ async def verify_token(
         "in_game_name": user.in_game_name,
         "verified": user.verified,
     }
+
+# ——————————————————————————————————————————————————————————
+# 3) Alias: /online_users → /online
+# ——————————————————————————————————————————————————————————
+
+@router.get("/online_users")
+async def get_online_users_alias(db: AsyncSession = Depends(get_db)):
+    return await get_online_users(db)

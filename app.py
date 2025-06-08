@@ -62,7 +62,6 @@ async def startup_event():
     for route in app.routes:
         print(f"✅ {route.path}")
 
-app.include_router(user_me.router)
 app.include_router(user_routes_async.router)
 app.include_router(user_register.router)
 app.include_router(replay_routes_async.router)

@@ -38,15 +38,15 @@ echo ""
 # ───────────────────────────────────────────────
 # ☁️ Production Postgres (Render)
 # ───────────────────────────────────────────────
-render_count=$(psql "$RENDER_DB_URI" -tAc "SELECT COUNT(*) FROM users;")
+# render_count=$(psql "$RENDER_DB_URI" -tAc "SELECT COUNT(*) FROM users;")
 
-echo "☁️ Render (Prod) Postgres Users"
-echo "-------------------------------"
-echo "📊 Prod DB users: $render_count"
-if [ "$render_count" -gt 0 ]; then
-  psql "$RENDER_DB_URI" -P pager=off -c \
-    "SELECT email, in_game_name, CASE WHEN is_admin THEN '✅ admin' ELSE '❌' END AS role FROM users;" \
-    | sed '1d;$d' | sed 's/^/   - /'
-else
-  echo "   No Render Postgres users found."
-fi
+# echo "☁️ Render (Prod) Postgres Users"
+# echo "-------------------------------"
+# echo "📊 Prod DB users: $render_count"
+# if [ "$render_count" -gt 0 ]; then
+#  psql "$RENDER_DB_URI" -P pager=off -c \
+#    "SELECT email, in_game_name, CASE WHEN is_admin THEN '✅ admin' ELSE '❌' END AS role FROM users;" \
+#    | sed '1d;$d' | sed 's/^/   - /'
+# else
+#  echo "   No Render Postgres users found."
+# fi

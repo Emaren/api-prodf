@@ -8,9 +8,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-    uid = Column(String, unique=True, nullable=False)
-    email = Column(String, unique=True, index=True)
-    in_game_name = Column(String, nullable=True)
+    uid = Column(String(100), unique=True, nullable=False)
+    email = Column(String(100), unique=True, index=True)
+    in_game_name = Column(String, nullable=True, unique=True)
     verified = Column(Boolean, default=False)
     wallet_address = Column(String(100), nullable=True)
     lock_name = Column(Boolean, default=False)
