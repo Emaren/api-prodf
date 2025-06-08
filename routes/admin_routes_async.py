@@ -4,6 +4,7 @@ from sqlalchemy.future import select
 from db.models import User
 from db.db import get_async_session
 from datetime import datetime
+from sqlalchemy import desc
 import os
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
@@ -30,7 +31,7 @@ async def list_users(
     session: AsyncSession = Depends(get_async_session),
 ):
     verify_admin_token(authorization, x_admin_token)
-    result = await session.execute(select(User))
+    result = await session.execute(select(User).order_by(desc(User.created_at)))
     users = result.scalars().all()
     return [u.to_dict() for u in users]
 
