@@ -7,3 +7,7 @@ trace.index
 serviceAccountKey.json
 node_modules
 aoe2hd-parsing.tar.gz
+venv/
+__pycache__/
+.git/objects/pack/._*
+
