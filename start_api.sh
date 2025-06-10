@@ -3,4 +3,4 @@
 cd "$(dirname "$0")"
 
 # skip activation, call uvicorn with the venv's Python directly
-exec ./venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8002
+exec ./venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8003

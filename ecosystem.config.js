@@ -1,12 +1,12 @@
 module.exports = {
   apps: [
     {
-      name: 'aoe2hd-api',
+      name: 'api-staging',
       script: './start_api.sh',
-      cwd: '/var/www/aoe2hdbets-api/aoe2hd-parsing',
+      cwd: '/var/www/api-staging',
       interpreter: 'bash',
       env: {
-        PYTHONUNBUFFERED: '1'
+        ENV: 'development'
       }
     }
   ]

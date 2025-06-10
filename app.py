@@ -75,7 +75,7 @@ app.include_router(traffic_route.router)
 
 @app.get("/")
 def root():
-    return {"message": "AoE2 Betting Backend is running!"}
+    return {"message": "AoE2 Betting Backend api-staging is running!"}
 
 @app.get("/api/game_stats")
 async def get_game_stats(db_gen=Depends(get_db)):
