@@ -11,3 +11,4 @@ venv/
 __pycache__/
 .git/objects/pack/._*
 
+scripts/ip_timestamps.json
