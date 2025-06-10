@@ -21,7 +21,8 @@ from routes import (
     admin_routes_async,
     bets,
     user_ping,
-    chain_id,  # ✅ NEW
+    chain_id,
+    traffic_route,
 )
 
 print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
@@ -69,7 +70,8 @@ app.include_router(debug_routes_async.router)
 app.include_router(admin_routes_async.router)
 app.include_router(bets.router)
 app.include_router(user_ping.router)
-app.include_router(chain_id.router)  # ✅ NEW
+app.include_router(chain_id.router)
+app.include_router(traffic_route.router)
 
 @app.get("/")
 def root():
