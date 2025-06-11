@@ -50,6 +50,7 @@ app.add_middleware(
         "https://aoe2hd-frontend.onrender.com",
         "https://aoe2hdbets.com",
         "https://www.aoe2hdbets.com",
+	"https://app-staging.aoe2hdbets.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
