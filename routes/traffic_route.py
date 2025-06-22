@@ -1,3 +1,5 @@
+# routes/traffic_route.py (full production patch restored)
+
 from fastapi import APIRouter, Depends
 from firebase_admin import auth
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,13 +40,21 @@ def get_country(ip):
 @router.get("/api/traffic")
 async def get_traffic_stats(db: AsyncSession = Depends(get_db)):
     try:
-        # Firebase & Postgres users
-        firebase_users = auth.list_users().iterate_all()
-        firebase_emails = sorted([u.email for u in firebase_users if u.email])
+        # --- Firebase & Postgres users ---------------------------------
+        firebase_emails = []
+        for u in auth.list_users().iterate_all():
+            if getattr(u, "email", None):          # skip users without email
+                firebase_emails.append(u.email.strip().lower())
+
+        firebase_emails = sorted(set(firebase_emails))
 
         result = await db.execute(select(User.email))
-        postgres_emails = sorted([r[0] for r in result.fetchall() if r[0]])
+        postgres_emails = sorted({(r[0] or "").strip().lower() for r in result.fetchall()})
+
         only_in_firebase = list(set(firebase_emails) - set(postgres_emails))
+        only_in_db       = list(set(postgres_emails) - set(firebase_emails))
+        both             = list(set(firebase_emails) & set(postgres_emails))
+        # ---------------------------------------------------------------
 
         # Load persistent visit data
         ip_counts = load_json(IP_COUNT_FILE)
@@ -90,7 +100,6 @@ async def get_traffic_stats(db: AsyncSession = Depends(get_db)):
 
                 recent_entries.append(line)
 
-        # Filter 24h real users
         real_24h_ips = {
             ip for ip in ip_categories["real"]
             if any(datetime.fromisoformat(ts) > day_ago for ts in ip_timestamps.get(ip, []))
@@ -99,20 +108,21 @@ async def get_traffic_stats(db: AsyncSession = Depends(get_db)):
         repeat_visitors = len([ip for ip, count in ip_counts.items() if count > 1])
         top_repeat_ips = sorted(ip_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
-        # Top countries from real IPs only
         real_countries = [ip_countries[ip] for ip in ip_categories["real"]]
         top_countries = Counter(real_countries).most_common(10)
 
-        # Save
         save_json(IP_COUNT_FILE, ip_counts)
         save_json(IP_TIMESTAMP_FILE, ip_timestamps)
         save_json(IP_COUNTRY_FILE, ip_countries)
 
+        # FINAL BULLETPROOF RETURN
         return {
             "firebase_total": len(firebase_emails),
             "postgres_total": len(postgres_emails),
             "mismatch_count": len(only_in_firebase),
-            "only_in_firebase": only_in_firebase,
+            "only_in_firebase": only_in_firebase or [],
+            "only_in_db": only_in_db or [],
+            "both": both or [],
             "traffic_log": "\n".join(recent_entries[-20:]),
             "summary": {
                 "real_24h": len(real_24h_ips),

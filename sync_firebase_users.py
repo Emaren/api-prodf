@@ -1,4 +1,4 @@
-# sync_firebase_users.py
+# sync_firebase_users.py (final version)
 import os
 import asyncio
 from datetime import datetime
@@ -23,18 +23,21 @@ DATABASE_URL = os.getenv(
 engine = create_async_engine(DATABASE_URL)
 Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-# 🔁 Sync users
+# 🔁 Sync users (paged full sync)
 async def sync_users():
     async with Session() as session:
-        page = auth.list_users()
         count = 0
+        page = auth.list_users()
 
-        while page:
+        while True:
             for user in page.users:
                 uid = user.uid
                 email = user.email
-                name = user.display_name or ""
-                print(f"🔍 Checking {uid} - {email}")
+
+                # Ensure fallback placeholder name for empty display names
+                raw_name = user.display_name.strip() if user.display_name else f"firebase_{uid[:6]}"
+
+                print(f"🔍 Checking {uid} - {email} - {raw_name}")
 
                 result = await session.execute(
                     User.__table__.select().where(User.uid == uid)
@@ -48,13 +51,16 @@ async def sync_users():
                     session.add(User(
                         uid=uid,
                         email=email,
-                        in_game_name=name,
+                        in_game_name=raw_name,
                         verified=False,
                         created_at=datetime.utcnow()
                     ))
                     count += 1
 
-            page = page.get_next_page()
+            if page.has_next_page:
+                page = page.get_next_page()
+            else:
+                break
 
         await session.commit()
         print(f"✅ Sync complete. {count} new users added.")

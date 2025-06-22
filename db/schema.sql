@@ -2,13 +2,12 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 17.4 (Homebrew)
--- Dumped by pg_dump version 17.4 (Homebrew)
+-- Dumped from database version 14.18 (Ubuntu 14.18-0ubuntu0.22.04.1)
+-- Dumped by pg_dump version 14.18 (Ubuntu 14.18-0ubuntu0.22.04.1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -25,6 +24,7 @@ DROP INDEX public.ix_game_stats_user_uid;
 ALTER TABLE ONLY public.users DROP CONSTRAINT users_uid_key;
 ALTER TABLE ONLY public.users DROP CONSTRAINT users_pkey;
 ALTER TABLE ONLY public.game_stats DROP CONSTRAINT uq_replay_final;
+ALTER TABLE ONLY public.users DROP CONSTRAINT unique_in_game_name;
 ALTER TABLE ONLY public.game_stats DROP CONSTRAINT game_stats_pkey;
 ALTER TABLE ONLY public.alembic_version DROP CONSTRAINT alembic_version_pkc;
 ALTER TABLE public.users ALTER COLUMN id DROP DEFAULT;
@@ -55,9 +55,10 @@ ALTER TABLE public.alembic_version OWNER TO aoe2user;
 
 CREATE TABLE public.game_stats (
     id integer NOT NULL,
+    user_uid character varying,
     replay_file character varying(500) NOT NULL,
     replay_hash character varying(64) NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
+    created_at timestamp without time zone,
     game_version character varying(50),
     map character varying(100),
     game_type character varying(50),
@@ -74,8 +75,7 @@ CREATE TABLE public.game_stats (
     disconnect_detected boolean,
     parse_source character varying(20),
     parse_reason character varying(50),
-    original_filename character varying(255),
-    user_uid character varying
+    original_filename character varying(255)
 );
 
 
@@ -94,7 +94,7 @@ CREATE SEQUENCE public.game_stats_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.game_stats_id_seq OWNER TO aoe2user;
+ALTER TABLE public.game_stats_id_seq OWNER TO aoe2user;
 
 --
 -- Name: game_stats_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: aoe2user
@@ -116,7 +116,9 @@ CREATE TABLE public.users (
     wallet_address character varying(100),
     lock_name boolean,
     created_at timestamp without time zone,
-    token character varying(128)
+    token character varying(128),
+    last_seen timestamp without time zone,
+    is_admin boolean
 );
 
 
@@ -135,7 +137,7 @@ CREATE SEQUENCE public.users_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.users_id_seq OWNER TO aoe2user;
+ALTER TABLE public.users_id_seq OWNER TO aoe2user;
 
 --
 -- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: aoe2user
@@ -172,6 +174,14 @@ ALTER TABLE ONLY public.alembic_version
 
 ALTER TABLE ONLY public.game_stats
     ADD CONSTRAINT game_stats_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users unique_in_game_name; Type: CONSTRAINT; Schema: public; Owner: aoe2user
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT unique_in_game_name UNIQUE (in_game_name);
 
 
 --

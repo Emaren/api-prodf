@@ -14,8 +14,8 @@ from firebase_utils import initialize_firebase
 # ✅ Routes
 from routes import (
     user_me,
-    user_routes_async,
     user_register,
+    user_exists,
     replay_routes_async,
     debug_routes_async,
     admin_routes_async,
@@ -43,6 +43,7 @@ app.add_middleware(LogRequestMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+	"https://app-prodf.aoe2hdbets.com",
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
@@ -50,7 +51,7 @@ app.add_middleware(
         "https://aoe2hd-frontend.onrender.com",
         "https://aoe2hdbets.com",
         "https://www.aoe2hdbets.com",
-	"https://app-staging.aoe2hdbets.com",
+        "https://app-staging.aoe2hdbets.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -64,8 +65,10 @@ async def startup_event():
     for route in app.routes:
         print(f"✅ {route.path}")
 
-app.include_router(user_routes_async.router)
+# ✅ Register modular routers
+app.include_router(user_me.router)
 app.include_router(user_register.router)
+app.include_router(user_exists.router, prefix="/api/user")
 app.include_router(replay_routes_async.router)
 app.include_router(debug_routes_async.router)
 app.include_router(admin_routes_async.router)

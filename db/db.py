@@ -33,10 +33,13 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     connect_args=connect_args,
-    pool_pre_ping=True,            
-    pool_recycle=300,            
-    pool_timeout=30,                
+    pool_pre_ping=True,
+    pool_recycle=300,
+    pool_timeout=60,  # was 30
+    pool_size=20,     # was 40
+    max_overflow=40,  # was 80
 )
+
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 # ────────────────────────────────────────────────────────────────

@@ -39,7 +39,7 @@ if ENV == "development" and os.path.exists(local_path):
 
 # --- Exports ---
 def get_fastapi_api_url():
-    return os.getenv("FASTAPI_API_URL", "http://localhost:8002/api/parse_replay")
+    return os.getenv("FASTAPI_API_URL", "http://localhost:8003/api/parse_replay")
 
 def get_api_targets():
     val = os.getenv("API_TARGETS")

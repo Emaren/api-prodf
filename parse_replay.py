@@ -23,7 +23,7 @@ LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", config.get("logging_level", "DEB
 logging.basicConfig(level=getattr(logging, LOGGING_LEVEL, logging.DEBUG))
 
 ENDPOINTS = {
-    "local": "http://localhost:8002/api/parse_replay",
+    "local": "http://localhost:8003/api/parse_replay",
     "render": "https://aoe2hd-parser-api.onrender.com/api/parse_replay"
 }
 

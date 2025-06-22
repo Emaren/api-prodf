@@ -1,7 +1,7 @@
 from firebase_admin import auth, credentials, initialize_app
 from pprint import pprint
 
-cred = credentials.Certificate("serviceAccountKey.json")
+cred = credentials.Certificate("/var/www/api-prod/serviceAccountKey.json")
 initialize_app(cred)
 
 users = auth.list_users().users

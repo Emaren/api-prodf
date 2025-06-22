@@ -1,13 +1,15 @@
 module.exports = {
   apps: [
     {
-      name: 'aoe2hd-api',
-      script: './start_api.sh',
-      cwd: '/var/www/aoe2hdbets-api/aoe2hd-parsing',
-      interpreter: 'bash',
+      name: "api-prodf",
+      cwd: "/var/www/api-prodf",
+      script: "/var/www/api-prodf/venv/bin/python3",
+      args: "-m uvicorn app:app --host 0.0.0.0 --port 8003",
       env: {
-        PYTHONUNBUFFERED: '1'
-      }
+        GOOGLE_APPLICATION_CREDENTIALS: "/var/www/api-prodf/secrets/serviceAccountKey.json",
+        GOOGLE_CLOUD_PROJECT: "aoe2hd"
+      },
+      restart_delay: 500
     }
   ]
 };

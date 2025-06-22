@@ -6,12 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.db import get_db
 from db.models import User
-from routes.user_routes_async import verify_firebase_token
+from dependencies.auth import get_firebase_user
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
+# 🔑 Dependency to retrieve current logged-in user
 async def get_current_user(
-    credentials: dict = Depends(verify_firebase_token),
+    credentials: dict = Depends(get_firebase_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     uid = credentials.get("uid")
@@ -24,6 +25,7 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
 
+# 🔧 Main /me route, now returning is_admin
 @router.get("/me")
 async def get_user_me(user: User = Depends(get_current_user)):
     return {
@@ -33,5 +35,5 @@ async def get_user_me(user: User = Depends(get_current_user)):
         "verified": user.verified,
         "created_at": user.created_at,
         "last_seen": user.last_seen,
+        "is_admin": user.is_admin  # <-- 🔥 critical fix
     }
-
