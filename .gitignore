@@ -15,3 +15,4 @@ scripts/ip_timestamps.json
 scripts/ip_visit_counts.json
 scripts/ip_country.json
 secrets/*.json
+secrets/*.json
