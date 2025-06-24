@@ -40,19 +40,10 @@ class LogRequestMiddleware(BaseHTTPMiddleware):
 app = FastAPI()
 app.add_middleware(LogRequestMiddleware)
 
+# ✅ Add dev + prod CORS support
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-	"https://app-prodf.aoe2hdbets.com",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "https://aoe2-betting.vercel.app",
-        "https://aoe2hd-frontend.onrender.com",
-        "https://aoe2hdbets.com",
-        "https://www.aoe2hdbets.com",
-        "https://app-staging.aoe2hdbets.com",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,3 +92,4 @@ async def get_game_stats(db_gen=Depends(get_db)):
     except Exception as e:
         logging.error(f"❌ Failed to fetch game stats: {e}", exc_info=True)
         return []
+

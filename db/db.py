@@ -54,7 +54,8 @@ async def init_db_async():
     for attempt in range(retries):
         try:
             async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
+                # await conn.run_sync(Base.metadata.create_all)
+                pass
             logging.info("✅ Async tables created.")
             return
         except asyncpg.exceptions.ConnectionDoesNotExistError as e:
