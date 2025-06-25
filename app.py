@@ -57,7 +57,7 @@ async def startup_event():
         print(f"✅ {route.path}")
 
 # ✅ Register modular routers
-app.include_router(user_me.router)
+app.include_router(user_me.router, prefix="/api/user")
 app.include_router(user_register.router)
 app.include_router(user_exists.router, prefix="/api/user")
 app.include_router(replay_routes_async.router)

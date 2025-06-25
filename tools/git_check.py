@@ -14,6 +14,10 @@ repos = {
     "local-prod": {
         "aoe2hd-frontend": "/Users/tonyblum/projects/app-prod",
         "aoe2hd-parsing": "/Users/tonyblum/projects/api-prod",
+        "app-prodf": "/Users/tonyblum/projects/app-prodf",
+        "app-prodn": "/Users/tonyblum/projects/app-prodn",
+        "api-prodf": "/Users/tonyblum/projects/api-prodf",
+        "api-prodn": "/Users/tonyblum/projects/api-prodn",
         "explorerdev": "/Users/tonyblum/projects/explorer-prod",
         "wolodev": "/Users/tonyblum/projects/wolo-prod",
     },
@@ -26,6 +30,10 @@ repos = {
     "vps-prod": {
         "aoe2hd-frontend": "/var/www/app-prod",
         "aoe2hd-parsing": "/var/www/api-prod",
+        "app-prodf": "/var/www/app_prodf",
+        "app-prodn": "/var/www/app-prodn",
+        "api-prodf": "/var/www/api-prodf",
+        "api-prodn": "/var/www/api-prodn",
         "explorerdev": "/var/www/explorer-prod",
         "wolodev": "/var/www/wolo-prod",
     }
@@ -48,17 +56,13 @@ def check_status(repo_path):
         return f"{repo_path} ❌ Error: {e}"
 
 def check_sync(path1, path2):
-    if not os.path.exists(path1):
-        return f"{path1} ❌ Not found"
-    if not os.path.exists(path2):
-        return f"{path2} ❌ Not found"
+    if not os.path.exists(path1) or not os.path.exists(path2):
+        return False
     try:
         dircmp = filecmp.dircmp(path1, path2, ignore=[".git", "__pycache__"])
-        if dircmp.left_only or dircmp.right_only or dircmp.diff_files:
-            return f"🟡 {path1} ≠ {path2} ❗ Not in sync"
-        return f"🟢 {path1} ≡ {path2} ✅ In sync"
-    except Exception as e:
-        return f"⚠️ Sync check error: {e}"
+        return not (dircmp.left_only or dircmp.right_only or dircmp.diff_files)
+    except Exception:
+        return False
 
 def main():
     for scope, paths in repos.items():
@@ -66,15 +70,27 @@ def main():
         for name, path in paths.items():
             print(" •", check_status(path))
 
-        # Add sync check directly after each PROD section
         if scope.endswith("prod"):
             sync_scope = scope.replace("prod", "staging")
             label = "LOCAL" if scope.startswith("local") else "VPS"
             print(f"\n🔁 {label} STAGING ⇄ PROD SYNC CHECK")
             for name in repos[sync_scope]:
-                path_staging = repos[sync_scope][name]
-                path_prod = paths[name]
-                print(" •", check_sync(path_staging, path_prod))
+                if name in paths:
+                    p1, p2 = repos[sync_scope][name], paths[name]
+                    tag = "✅ In sync" if check_sync(p1, p2) else "❌ Not in sync"
+                    print(f" • VPS: {p2} ⇄ Local: {p1} {tag}")
+
+    print(f"\n🔁 LOCAL ⇄ PROD SYNC CHECK (Manual Additions)")
+    manual_pairs = [
+        ("/var/www/app_prodf", "/Users/tonyblum/projects/app-prodf"),
+        ("/var/www/app-prodn", "/Users/tonyblum/projects/app-prodn"),
+        ("/var/www/api-prodf", "/Users/tonyblum/projects/api-prodf"),
+        ("/var/www/api-prodn", "/Users/tonyblum/projects/api-prodn"),
+    ]
+    for vps_path, local_path in manual_pairs:
+        tag = "✅ In sync" if check_sync(vps_path, local_path) else "❌ Not in sync"
+        print(f" • VPS: {vps_path} ⇄ Local: {local_path} {tag}")
 
 if __name__ == "__main__":
     main()
+

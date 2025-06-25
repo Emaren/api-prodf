@@ -1,6 +1,7 @@
 # routes/user_register.py (🔥 fully patched production version)
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -26,9 +27,9 @@ async def register_user(
         email = firebase_user.get("email", "").strip()
 
         if not payload.in_game_name or not payload.in_game_name.strip():
-            raise HTTPException(
+            return JSONResponse(
                 status_code=400,
-                detail={"field": "in_game_name", "error": "In-game name cannot be blank"},
+                content={"field": "in_game_name", "error": "In-game name cannot be blank"},
             )
 
         # 🔍 Check if UID already exists
@@ -43,9 +44,9 @@ async def register_user(
         name_check = await db.execute(select(User).where(User.in_game_name == payload.in_game_name))
         name_conflict = name_check.scalar_one_or_none()
         if name_conflict:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=400,
-                detail={"field": "in_game_name", "error": "In-game name already taken"},
+                content={"field": "in_game_name", "error": "In-game name already taken"},
             )
 
         # 🥇 First user gets admin rights
@@ -74,7 +75,10 @@ async def register_user(
 
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Email or in-game name already taken")
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Email or in-game name already taken"},
+        )
 
     except Exception as e:
         logger.error(f"❌ Registration error: {e}", exc_info=True)
