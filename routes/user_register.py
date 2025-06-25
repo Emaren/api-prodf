@@ -14,7 +14,7 @@ from db.schemas import UserRegisterRequest
 from dependencies.auth import get_firebase_user
 
 # ✅ Set prefix and tag
-router = APIRouter(prefix="/api/user", tags=["user"])
+router = APIRouter(tags=["user"])
 logger = logging.getLogger(__name__)
 
 @router.post("/register")

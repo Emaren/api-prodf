@@ -8,7 +8,7 @@ from db.db import get_db
 from db.models.user import User
 from routes.user_me import get_current_user
 
-router = APIRouter(prefix="/api/user", tags=["user"])
+router = APIRouter(tags=["user"])
 
 @router.get("/ping")
 async def ping_anonymous():
