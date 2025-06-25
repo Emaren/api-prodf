@@ -8,7 +8,7 @@ from db.db import get_db
 from db.models import User
 from dependencies.auth import get_firebase_user
 
-router = APIRouter(prefix="/api/user", tags=["user"])
+router = APIRouter(tags=["user"])
 
 # 🔑 Dependency to retrieve current logged-in user
 async def get_current_user(
