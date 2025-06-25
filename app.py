@@ -40,7 +40,7 @@ class LogRequestMiddleware(BaseHTTPMiddleware):
 app = FastAPI()
 app.add_middleware(LogRequestMiddleware)
 
-# ✅ Add dev + prod CORS support
+# ✅ Add CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -54,9 +54,10 @@ async def startup_event():
     initialize_firebase()
     await init_db_async()
     for route in app.routes:
-        print(f"✅ {route.path}")
+        if "/user" in route.path:
+            print(f"🔍 {route.methods} → {route.path} [{route.name}]")
 
-# ✅ Register modular routers
+# ✅ Register routers
 app.include_router(user_register.router, prefix="/api/user")
 app.include_router(user_me.router,       prefix="/api/user")
 app.include_router(user_exists.router,   prefix="/api/user")
@@ -92,4 +93,3 @@ async def get_game_stats(db_gen=Depends(get_db)):
     except Exception as e:
         logging.error(f"❌ Failed to fetch game stats: {e}", exc_info=True)
         return []
-
