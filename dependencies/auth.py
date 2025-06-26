@@ -4,13 +4,13 @@ from fastapi import Request, HTTPException, status
 from firebase_admin import auth, credentials, initialize_app
 import firebase_admin
 
-# ✅ Ensure Firebase is initialized once
+# ✅ Initialize Firebase only once
 if not firebase_admin._apps:
-    cred = credentials.Certificate("secrets/serviceAccountKey.json")  # Ensure this path is correct
+    cred = credentials.Certificate("secrets/serviceAccountKey.json")  # Ensure path is correct on VPS
     initialize_app(cred)
 
 async def get_firebase_user(request: Request):
-    print("🔎 Incoming Headers:", dict(request.headers))  # Debug incoming headers
+    print("🔎 Incoming Headers:", dict(request.headers))
 
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -38,4 +38,3 @@ async def get_firebase_user(request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired Firebase token",
         )
-

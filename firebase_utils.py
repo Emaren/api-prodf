@@ -1,21 +1,6 @@
-import os
-import json
-import firebase_admin
-from firebase_admin import credentials, auth
+# firebase_utils.py
+from firebase_admin import auth
 from firebase_admin import exceptions as firebase_exceptions
-
-# Initialize Firebase Admin SDK
-def initialize_firebase():
-    if firebase_admin._apps:
-        return  # Already initialized
-
-    json_key = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-    if json_key:
-        cred = credentials.Certificate(json.loads(json_key))
-    else:
-        cred = credentials.Certificate("serviceAccountKey.json")
-
-    firebase_admin.initialize_app(cred)
 
 # Verify ID token coming from frontend
 def verify_firebase_token(id_token: str):
@@ -43,7 +28,3 @@ def get_user_by_uid(uid: str):
     except Exception as e:
         print(f"❌ Firebase get_user_by_uid error: {e}")
         return None
-
-def get_user_from_token(token: str):
-    # TODO: replace with real Firebase validation
-    return {"uid": "test-uid", "email": "test@example.com"}
