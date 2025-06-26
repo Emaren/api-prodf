@@ -1,15 +1,17 @@
 # app.py
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import update
 import logging
 import os
 
 from db.db import init_db_async, get_db
-from db.models import GameStats
+from db.models import GameStats, User
 from firebase_utils import initialize_firebase
+from firebase_utils import get_user_from_token
 
 # ✅ Routes
 from routes import (
@@ -95,3 +97,41 @@ async def get_game_stats(db_gen=Depends(get_db)):
     except Exception as e:
         logging.error(f"❌ Failed to fetch game stats: {e}", exc_info=True)
         return []
+
+# ✅ NEW: Link Wallet Route
+@app.post("/api/user/link_wallet")
+async def link_wallet(request: Request, db: AsyncSession = Depends(get_db)):
+    try:
+        data = await request.json()
+        address = data.get("address")
+        if not address:
+            raise HTTPException(status_code=400, detail="Missing wallet address")
+
+        # 🔐 Authenticate Firebase Token
+        auth_header = request.headers.get("authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+        token = auth_header.split("Bearer ")[1]
+        user_info = get_user_from_token(token)
+        if not user_info or "uid" not in user_info:
+            raise HTTPException(status_code=401, detail="Invalid Firebase token")
+
+        firebase_uid = user_info["uid"]
+
+        # 🔄 Update DB
+        result = await db.execute(select(User).where(User.firebase_uid == firebase_uid))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await db.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(wallet_address=address)
+        )
+        await db.commit()
+        return {"message": "Wallet linked successfully"}
+    except Exception as e:
+        logging.error(f"❌ Failed to link wallet: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
