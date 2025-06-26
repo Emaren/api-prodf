@@ -1,12 +1,11 @@
 # dependencies/auth.py
-
 from fastapi import Request, HTTPException, status
 from firebase_admin import auth, credentials, initialize_app
 import firebase_admin
 
 # ✅ Initialize Firebase only once
 if not firebase_admin._apps:
-    cred = credentials.Certificate("secrets/serviceAccountKey.json")  # Ensure path is correct on VPS
+    cred = credentials.Certificate("secrets/serviceAccountKey.json")  # Path must be valid on VPS
     initialize_app(cred)
 
 async def get_firebase_user(request: Request):
