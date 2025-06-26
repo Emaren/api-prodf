@@ -43,3 +43,7 @@ def get_user_by_uid(uid: str):
     except Exception as e:
         print(f"❌ Firebase get_user_by_uid error: {e}")
         return None
+
+def get_user_from_token(token: str):
+    # TODO: replace with real Firebase validation
+    return {"uid": "test-uid", "email": "test@example.com"}
