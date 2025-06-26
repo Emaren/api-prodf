@@ -7,8 +7,7 @@ from db.models.user import User
 from db.db import get_db
 from dependencies.auth import get_firebase_user
 
-router = APIRouter(prefix="/api/user", tags=["user"])
-
+router = APIRouter(tags=["user"])
 
 class WalletLinkRequest(BaseModel):
     wallet_address: str
